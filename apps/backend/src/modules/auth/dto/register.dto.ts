@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, MinLength, Matches, IsIn } from "class-validator";
+import { IsString, IsOptional, IsEmail, IsUUID, MinLength, Matches, IsIn } from "class-validator";
 import { UserRole } from "@prisma/client";
 
 // §5.1 du Cahier des charges — inscription client.
@@ -27,4 +27,13 @@ export class RegisterDto {
   @IsOptional()
   @IsIn([UserRole.CLIENT, UserRole.PARTNER, UserRole.ADMIN])
   role?: UserRole;
+
+  // Ville/quartier de base du partenaire (ignoré pour les autres rôles) —
+  // voir AuthService.register. Sans ça, le profil partenaire ne recevait sa
+  // zone qu'au premier lancement de l'app (filet de sécurité dans
+  // PartnerHomeScreen), qui affectait une zone par défaut sans jamais la
+  // demander à l'utilisateur.
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
 }

@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../api/api_exception.dart';
 import '../../auth/auth_state.dart';
 import '../../countries/countries_repository.dart';
+import '../../models/partner_profile.dart';
 import '../../partners/partners_repository.dart';
 import 'partner_mission_screen.dart';
 import 'partner_offers_screen.dart';
@@ -60,18 +61,35 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
       // on prend le premier pays qui a réellement des zones configurées
       // (voir CountriesRepository.findFirstCountryWithZones).
       final countryWithZones = await _countries.findFirstCountryWithZones();
-      final zone = countryWithZones.zones.first;
 
-      // Filet de sécurité idempotent — voir PartnerSetup.tsx : le profil
-      // devrait déjà exister, cet appel couvre les comptes créés autrement.
-      await _partners.upsertProfile(currentZoneId: zone.id).catchError((_) {});
+      PartnerProfile? profile;
+      try {
+        profile = await _partners.getProfile();
+      } on ApiException catch (e) {
+        if (e.statusCode != 404) rethrow;
+      }
 
-      final profile = await _partners.getProfile();
+      // Filet de sécurité idempotent, uniquement si le profil n'existe pas
+      // encore (comptes créés avant l'ajout du choix de zone à l'inscription
+      // — voir RegisterScreen). Ne JAMAIS réaffecter la zone d'un profil
+      // existant ici : elle a été choisie à l'inscription ou corrigée par le
+      // partenaire dans PartnerProfileScreen, la réécraser à chaque
+      // ouverture de l'app annulerait silencieusement ce choix.
+      if (profile == null) {
+        final zone = countryWithZones.zones.first;
+        await _partners.upsertProfile(currentZoneId: zone.id);
+        profile = await _partners.getProfile();
+      }
+
+      final zone = countryWithZones.zones.firstWhere(
+        (z) => z.id == profile!.currentZoneId,
+        orElse: () => countryWithZones.zones.first,
+      );
 
       setState(() {
         _zoneId = zone.id;
         _zoneName = zone.name;
-        _profileStatus = profile.status;
+        _profileStatus = profile!.status;
         _available = profile.isAvailable;
       });
     } catch (e) {

@@ -3,7 +3,7 @@ import { apiRequest, ApiError } from '../api';
 import type { Country } from '../types';
 import { useTranslation } from '../i18n/I18nContext';
 
-type Step = 'register' | 'otp' | 'login';
+type Step = 'register' | 'otp' | 'login' | 'forgot' | 'reset';
 
 export default function AdminAuth({ country, onAuth }: { country: Country; onAuth: (token: string) => void }) {
   const { t } = useTranslation();
@@ -16,6 +16,14 @@ export default function AdminAuth({ country, onAuth }: { country: Country; onAut
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Mot de passe oublié — même mécanisme OTP que l'inscription (voir
+  // AuthService.requestPasswordReset/resetPassword côté backend) : le code
+  // reçu par SMS prouve la possession du téléphone et ouvre directement la
+  // session en cas de succès.
+  const [resetCode, setResetCode] = useState('');
+  const [resetDevOtp, setResetDevOtp] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -58,6 +66,40 @@ export default function AdminAuth({ country, onAuth }: { country: Country; onAut
     try {
       const res = await apiRequest<{ accessToken: string }>('POST', '/auth/login', {
         body: { phone, password },
+      });
+      onAuth(res.accessToken);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await apiRequest<{ message: string; devOtp?: string }>('POST', '/auth/password-reset/request', {
+        body: { phone },
+      });
+      setResetDevOtp(res.devOtp ?? null);
+      setResetCode(res.devOtp ?? '');
+      setStep('reset');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await apiRequest<{ accessToken: string }>('POST', '/auth/password-reset/confirm', {
+        body: { phone, code: resetCode, newPassword },
       });
       onAuth(res.accessToken);
     } catch (e) {
@@ -132,6 +174,45 @@ export default function AdminAuth({ country, onAuth }: { country: Country; onAut
               {t('auth.createAccount')}
             </button>
           </div>
+          <div className="row">
+            <button type="button" className="secondary" onClick={() => setStep('forgot')}>
+              {t('auth.forgotPassword')}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === 'forgot' && (
+        <form onSubmit={handleForgotSubmit}>
+          <div className="field">
+            <label>{t('auth.phone')}</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} required />
+          </div>
+          <div className="row">
+            <button type="submit" disabled={loading}>
+              {t('auth.sendResetCode')}
+            </button>
+            <button type="button" className="secondary" onClick={() => setStep('login')}>
+              {t('auth.backToLogin')}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === 'reset' && (
+        <form onSubmit={handleResetSubmit}>
+          {resetDevOtp && <div className="hint">{t('auth.devOtpHint', { code: resetDevOtp })}</div>}
+          <div className="field">
+            <label>{t('auth.otpCodeLabel')}</label>
+            <input value={resetCode} onChange={(e) => setResetCode(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label>{t('auth.newPasswordLabel')}</label>
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+          </div>
+          <button type="submit" disabled={loading}>
+            {t('auth.resetAndLoginButton')}
+          </button>
         </form>
       )}
     </div>

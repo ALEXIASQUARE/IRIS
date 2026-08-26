@@ -5,6 +5,7 @@ import '../../api/api_exception.dart';
 import '../../auth/auth_repository.dart';
 import '../../countries/countries_repository.dart';
 import '../../models/country.dart';
+import '../../models/zone.dart';
 import 'verify_otp_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -24,16 +25,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  late Future<List<Country>> _countriesFuture;
+  late final CountriesRepository _countriesRepo;
+  bool get _isPartner => widget.role == 'PARTNER';
+
+  List<Country> _countries = [];
+  bool _loadingCountries = true;
+  String? _countriesError;
   String? _selectedCountryIso;
+
+  // Ville/quartier — demandé uniquement pour un partenaire (§ retour terrain
+  // Dschang : sans ça, le profil recevait une zone par défaut sans jamais la
+  // demander, voir aussi PartnerProfileScreen pour la correction a posteriori).
+  List<Zone> _zones = [];
+  bool _loadingZones = false;
+  String? _zonesError;
+  String? _selectedCity;
+  String? _selectedZoneId;
+
   bool _submitting = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    final client = context.read<ApiClient>();
-    _countriesFuture = CountriesRepository(client).listCountries();
+    _countriesRepo = CountriesRepository(context.read<ApiClient>());
+    _loadCountries();
   }
 
   @override
@@ -46,10 +62,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  Future<void> _loadCountries() async {
+    setState(() {
+      _loadingCountries = true;
+      _countriesError = null;
+    });
+    try {
+      final countries = await _countriesRepo.listCountries();
+      setState(() => _countries = countries);
+    } catch (e) {
+      setState(() => _countriesError = e is ApiException ? e.message : e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingCountries = false);
+    }
+  }
+
+  void _onCountryChanged(String? value) {
+    setState(() {
+      _selectedCountryIso = value;
+      _zones = [];
+      _zonesError = null;
+      _selectedCity = null;
+      _selectedZoneId = null;
+    });
+    if (value != null && _isPartner) {
+      _loadZones(value);
+    }
+  }
+
+  Future<void> _loadZones(String isoCode) async {
+    final country = _countries.firstWhere((c) => c.isoCode == isoCode);
+    setState(() {
+      _loadingZones = true;
+      _zonesError = null;
+    });
+    try {
+      final zones = await _countriesRepo.listZones(country.id);
+      setState(() {
+        _zones = zones;
+        if (zones.isNotEmpty) {
+          _selectedCity = zones.first.cityName;
+          _selectedZoneId = zones.first.id;
+        }
+      });
+    } catch (e) {
+      setState(() => _zonesError = e is ApiException ? e.message : e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingZones = false);
+    }
+  }
+
+  List<String> get _cities => _zones.map((z) => z.cityName).toSet().toList()..sort();
+
+  List<Zone> get _zonesForSelectedCity =>
+      _zones.where((z) => z.cityName == _selectedCity).toList()..sort((a, b) => a.name.compareTo(b.name));
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCountryIso == null) {
       setState(() => _error = 'Choisissez un pays.');
+      return;
+    }
+    if (_isPartner && _selectedZoneId == null) {
+      setState(() => _error = 'Choisissez votre ville et votre quartier.');
       return;
     }
     setState(() {
@@ -66,6 +141,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         countryCode: _selectedCountryIso!,
         email: _emailController.text.trim(),
         role: widget.role,
+        zoneId: _isPartner ? _selectedZoneId : null,
       );
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -125,29 +201,60 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: (v) => (v == null || v.length < 8) ? 'Au moins 8 caractères' : null,
                 ),
                 const SizedBox(height: 16),
-                FutureBuilder<List<Country>>(
-                  future: _countriesFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const LinearProgressIndicator();
-                    }
-                    if (snapshot.hasError) {
-                      return Text(
-                        'Impossible de charger la liste des pays.',
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      );
-                    }
-                    final countries = snapshot.data ?? [];
-                    return DropdownButtonFormField<String>(
-                      initialValue: _selectedCountryIso,
-                      decoration: const InputDecoration(labelText: 'Pays'),
-                      items: countries
-                          .map((c) => DropdownMenuItem(value: c.isoCode, child: Text(c.name)))
+                if (_loadingCountries)
+                  const LinearProgressIndicator()
+                else if (_countriesError != null) ...[
+                  Text(_countriesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  const SizedBox(height: 8),
+                  OutlinedButton(onPressed: _loadCountries, child: const Text('Réessayer')),
+                ] else
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedCountryIso,
+                    decoration: const InputDecoration(labelText: 'Pays'),
+                    items: _countries.map((c) => DropdownMenuItem(value: c.isoCode, child: Text(c.name))).toList(),
+                    onChanged: _onCountryChanged,
+                  ),
+                if (_isPartner && _selectedCountryIso != null) ...[
+                  const SizedBox(height: 16),
+                  if (_loadingZones)
+                    const LinearProgressIndicator()
+                  else if (_zonesError != null) ...[
+                    Text(_zonesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => _loadZones(_selectedCountryIso!),
+                      child: const Text('Réessayer'),
+                    ),
+                  ] else if (_zones.isEmpty) ...[
+                    Text(
+                      'Aucune zone configurée pour ce pays pour le moment.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedCity,
+                      decoration: const InputDecoration(labelText: 'Ville'),
+                      items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _selectedCity = value;
+                          final zonesForCity = _zones.where((z) => z.cityName == value).toList();
+                          _selectedZoneId = zonesForCity.isNotEmpty ? zonesForCity.first.id : null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedZoneId,
+                      decoration: const InputDecoration(labelText: 'Quartier'),
+                      items: _zonesForSelectedCity
+                          .map((z) => DropdownMenuItem(value: z.id, child: Text(z.name)))
                           .toList(),
-                      onChanged: (value) => setState(() => _selectedCountryIso = value),
-                    );
-                  },
-                ),
+                      onChanged: (value) => setState(() => _selectedZoneId = value),
+                    ),
+                  ],
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),

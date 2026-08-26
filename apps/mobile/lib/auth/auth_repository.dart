@@ -24,6 +24,7 @@ class AuthRepository {
     required String countryCode,
     String? email,
     String? role,
+    String? zoneId,
   }) async {
     final result = await _client.post('/auth/register', body: {
       'firstName': firstName,
@@ -33,6 +34,7 @@ class AuthRepository {
       'countryCode': countryCode,
       if (email != null && email.isNotEmpty) 'email': email,
       if (role != null) 'role': role,
+      if (zoneId != null) 'zoneId': zoneId,
     }) as Map<String, dynamic>;
 
     return RegisterResult(
@@ -64,5 +66,27 @@ class AuthRepository {
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });
+  }
+
+  // Mot de passe oublié, étape 1 — envoie un code par SMS au numéro du
+  // compte. Même forme de réponse que register() (devOtp uniquement en dev).
+  Future<RegisterResult> requestPasswordReset({required String phone}) async {
+    final result = await _client.post('/auth/password-reset/request', body: {'phone': phone}) as Map<String, dynamic>;
+    return RegisterResult(userId: '', message: result['message'] as String, devOtp: result['devOtp'] as String?);
+  }
+
+  // Mot de passe oublié, étape 2 — le code reçu par SMS ouvre directement la
+  // session en cas de succès (voir AuthService.resetPassword côté backend).
+  Future<AuthTokens> confirmPasswordReset({
+    required String phone,
+    required String code,
+    required String newPassword,
+  }) async {
+    final result = await _client.post('/auth/password-reset/confirm', body: {
+      'phone': phone,
+      'code': code,
+      'newPassword': newPassword,
+    });
+    return AuthTokens.fromJson(result as Map<String, dynamic>);
   }
 }

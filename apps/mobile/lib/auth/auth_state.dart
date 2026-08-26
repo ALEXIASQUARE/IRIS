@@ -51,6 +51,14 @@ class AuthState extends ChangeNotifier {
     await _persistAndApply(tokens);
   }
 
+  // Mot de passe oublié — le code reçu par SMS prouve la possession du
+  // téléphone du compte, donc on ouvre directement la session (même
+  // mécanisme que verifyOtp) plutôt que de renvoyer à l'écran de connexion.
+  Future<void> resetPassword({required String phone, required String code, required String newPassword}) async {
+    final tokens = await authRepository.confirmPasswordReset(phone: phone, code: code, newPassword: newPassword);
+    await _persistAndApply(tokens);
+  }
+
   Future<void> logout() async {
     _tokens = null;
     _role = null;

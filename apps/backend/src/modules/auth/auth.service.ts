@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, UnauthorizedException, BadRequestException, NotFoundException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -45,6 +46,20 @@ export class AuthService {
       throw new BadRequestException('Pays non pris en charge pour le moment.');
     }
 
+    // Ville/quartier de base — uniquement pertinent pour un partenaire
+    // (voir PartnersService.upsertProfile pour la même validation, réappliquée
+    // ici car AuthModule ne dépend pas de PartnersModule). Validé avant la
+    // création du compte pour ne jamais laisser un utilisateur créé sans
+    // profil partenaire cohérent.
+    let zoneId: string | undefined;
+    if (dto.role === UserRole.PARTNER && dto.zoneId) {
+      const zone = await this.prisma.zone.findUnique({ where: { id: dto.zoneId } });
+      if (!zone || !zone.isActive) {
+        throw new BadRequestException('Zone introuvable ou inactive.');
+      }
+      zoneId = dto.zoneId;
+    }
+
     const passwordHash = await argon2.hash(dto.password);
 
     const user = await this.prisma.user.create({
@@ -59,6 +74,10 @@ export class AuthService {
         role: dto.role ?? undefined, // undefined -> défaut Prisma (CLIENT)
       },
     });
+
+    if (zoneId) {
+      await this.prisma.partnerProfile.create({ data: { userId: user.id, currentZoneId: zoneId } });
+    }
 
     const code = await this.issueOtp(dto.phone);
 
@@ -84,31 +103,76 @@ export class AuthService {
     return code;
   }
 
-  // §5.1 étape 2 — Vérification OTP. Le PIN de mission suit une logique
-  // similaire mais distincte (voir MissionsService) : ne pas confondre les deux.
-  async verifyOtp(dto: VerifyOtpDto) {
-    const pending = this.otpStore.get(dto.phone);
+  // Partagé par verifyOtp et resetPassword — un seul et même mécanisme OTP
+  // (voir issueOtp) sert à la fois à la vérification d'inscription et à la
+  // réinitialisation de mot de passe.
+  private consumeOtp(phone: string, code: string): void {
+    const pending = this.otpStore.get(phone);
     if (!pending) {
       throw new BadRequestException("Aucun code en attente pour ce numéro.");
     }
     if (pending.expiresAt < new Date()) {
-      this.otpStore.delete(dto.phone);
+      this.otpStore.delete(phone);
       throw new BadRequestException('Code expiré. Veuillez en demander un nouveau.');
     }
     if (pending.attempts >= this.OTP_MAX_ATTEMPTS) {
-      this.otpStore.delete(dto.phone);
+      this.otpStore.delete(phone);
       throw new BadRequestException('Trop de tentatives. Veuillez demander un nouveau code.');
     }
-    if (pending.code !== dto.code) {
+    if (pending.code !== code) {
       pending.attempts += 1;
       throw new BadRequestException('Code incorrect.');
     }
+    this.otpStore.delete(phone);
+  }
 
-    this.otpStore.delete(dto.phone);
+  // §5.1 étape 2 — Vérification OTP. Le PIN de mission suit une logique
+  // similaire mais distincte (voir MissionsService) : ne pas confondre les deux.
+  async verifyOtp(dto: VerifyOtpDto) {
+    this.consumeOtp(dto.phone, dto.code);
 
     const user = await this.prisma.user.update({
       where: { phone: dto.phone },
       data: { phoneVerifiedAt: new Date() },
+    });
+
+    return this.issueTokens(user.id, user.role);
+  }
+
+  // Mot de passe oublié, étape 1 — envoie un code par SMS au numéro du
+  // compte (même mécanisme que l'inscription). Ne révèle pas si le compte
+  // existe autrement que par ce message — cohérent avec le reste de l'API
+  // qui n'a pas de politique d'anti-énumération dédiée (MVP).
+  async requestPasswordReset(phone: string) {
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      throw new NotFoundException('Aucun compte associé à ce numéro.');
+    }
+
+    const code = await this.issueOtp(phone);
+    const devOtp = process.env.OTP_PROVIDER === 'mock' ? code : undefined;
+
+    return {
+      message: 'Un code de réinitialisation a été envoyé par SMS.',
+      ...(devOtp ? { devOtp } : {}),
+    };
+  }
+
+  // Mot de passe oublié, étape 2 — le code reçu par SMS prouve la possession
+  // du téléphone du compte, donc on ouvre directement la session (comme pour
+  // verifyOtp) plutôt que de renvoyer l'utilisateur à l'écran de connexion.
+  async resetPassword(phone: string, code: string, newPassword: string) {
+    this.consumeOtp(phone, code);
+
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      throw new NotFoundException('Aucun compte associé à ce numéro.');
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, phoneVerifiedAt: user.phoneVerifiedAt ?? new Date() },
     });
 
     return this.issueTokens(user.id, user.role);

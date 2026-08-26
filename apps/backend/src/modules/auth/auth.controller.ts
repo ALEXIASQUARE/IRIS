@@ -6,6 +6,8 @@ import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
+import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { Public } from "../../common/decorators/public.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 
@@ -53,5 +55,23 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: { id: string }) {
     return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
+  }
+
+  // Mot de passe oublié — mêmes limites de débit que register()/verify-otp,
+  // ces routes envoient/consomment un SMS.
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post("password-reset/request")
+  @HttpCode(HttpStatus.OK)
+  requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.requestPasswordReset(dto.phone);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post("password-reset/confirm")
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.phone, dto.code, dto.newPassword);
   }
 }
