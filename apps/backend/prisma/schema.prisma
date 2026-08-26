@@ -1,0 +1,551 @@
+// IRIS — Schéma de données
+// Référence : Cahier des charges v1.0 (§10, §21.10) + Addendum technique v1.1 (§3)
+//
+// Principe directeur : toute donnée susceptible de varier d'un pays à l'autre
+// (devise, langue, grille tarifaire, catalogue de services, réglementation
+// santé) est rattachée à Country dès le MVP — voir Addendum §5.1.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Choix : MariaDB (décision explicite de l'équipe, remplace la
+  // recommandation PostgreSQL par défaut du Cahier des charges v1.0 §12).
+  // Prisma pilote MariaDB via son connecteur "mysql", pleinement compatible.
+  // Conséquence sur le schéma : MariaDB n'a pas de type tableau natif
+  // (contrairement à PostgreSQL) — les deux champs qui utilisaient
+  // String[] sont donc modélisés en Json ci-dessous.
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GÉOGRAPHIE / MULTI-PAYS (Addendum §3, §5.1)
+// ─────────────────────────────────────────────────────────────────────────
+
+model Country {
+  id                    String   @id @default(uuid())
+  isoCode               String   @unique // ex: CM, SN, CI
+  name                  String
+  currency              String   // ex: XAF
+  defaultLanguage       String   // ex: fr, en
+  isActive              Boolean  @default(false)
+  healthModuleEnabled   Boolean  @default(false) // jamais activé sans validation juridique — §1, Phase 4
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  zones            Zone[]
+  users            User[]
+  serviceCategories ServiceCategory[]
+  pricingConfigs   PricingConfig[]
+  paymentProviders CountryPaymentProvider[]
+
+  @@map("countries")
+}
+
+model Zone {
+  id            String   @id @default(uuid())
+  countryId     String
+  country       Country  @relation(fields: [countryId], references: [id])
+  cityName      String
+  name          String   // ex: "Douala - Akwa"
+  isActive      Boolean  @default(true)
+  // Rayon simple pour le MVP ; migrable vers un polygone (PostGIS) plus tard.
+  centerLat     Float
+  centerLng     Float
+  radiusMeters  Int      @default(5000)
+
+  addresses     Address[]
+  bookings      Booking[]
+
+  @@map("zones")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// UTILISATEURS ET RÔLES (§4)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CLIENT
+  PARTNER
+  ADMIN
+  SUPER_ADMIN
+  HEALTH_PROFESSIONAL // futur rôle — §4, non activé au MVP
+}
+
+model User {
+  id                String    @id @default(uuid())
+  countryId         String
+  country           Country   @relation(fields: [countryId], references: [id])
+  phone             String    @unique // identifiant pivot — Addendum §5.3
+  email             String?
+  passwordHash      String
+  firstName         String
+  lastName          String
+  preferredLanguage String    @default("fr")
+  role              UserRole  @default(CLIENT)
+  phoneVerifiedAt   DateTime?
+  isBlocked         Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  addresses         Address[]
+  partnerProfile    PartnerProfile?
+  bookingsAsClient  Booking[]       @relation("ClientBookings")
+  ratingsGiven      Rating[]        @relation("RatingsGiven")
+  ratingsReceived   Rating[]        @relation("RatingsReceived")
+  incidentsReported Incident[]      @relation("IncidentReporter")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  zoneId     String
+  zone       Zone     @relation(fields: [zoneId], references: [id])
+  label      String?  // ex: "Domicile", "Bureau"
+  landmark   String   // repère texte — prioritaire dans un contexte sans adressage postal fiable (Addendum §5.5)
+  district   String?  // quartier
+  latitude   Float
+  longitude  Float
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  bookings   Booking[]
+
+  @@map("addresses")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PARTENAIRES (§4, §6)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum PartnerStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model PartnerProfile {
+  id                String        @id @default(uuid())
+  userId            String        @unique
+  user              User          @relation(fields: [userId], references: [id])
+  status            PartnerStatus @default(PENDING_REVIEW)
+  emergencyContact  String?
+  isAvailable       Boolean       @default(false)
+  // Zone déclarée par le partenaire au moment où il se met disponible —
+  // utilisée pour le matching (algorithme inchangé).
+  currentZoneId     String?
+  // Position GPS temps réel — Phase 2 (§15), utilisée pour la navigation
+  // (trajet partenaire -> client), pas pour le matching. Mise à jour par
+  // le partenaire en direct pendant PARTNER_ASSIGNED/PARTNER_EN_ROUTE.
+  currentLat        Float?
+  currentLng        Float?
+  locationUpdatedAt DateTime?
+  averageRating     Float?
+  minAgePolicySnapshot Int        @default(18) // seuil configurable au moment de l'agrément — §6.1
+  approvedAt        DateTime?
+  approvedByAdminId String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  documents         PartnerDocument[]
+  offers            Offer[]
+  missionsAssigned  Booking[]         @relation("AssignedPartner")
+
+  @@map("partner_profiles")
+}
+
+model PartnerDocument {
+  id               String         @id @default(uuid())
+  partnerProfileId String
+  partnerProfile   PartnerProfile @relation(fields: [partnerProfileId], references: [id])
+  type             String         // ex: "CNI", "casier_judiciaire", "photo"
+  storageKey       String         // clé objet S3 — accès restreint par rôle, §13
+  uploadedAt       DateTime       @default(now())
+
+  @@map("partner_documents")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CATALOGUE DE SERVICES (§2, §21.2-21.4)
+// ─────────────────────────────────────────────────────────────────────────
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  countryId   String
+  country     Country  @relation(fields: [countryId], references: [id])
+  code        String   // ex: "LAUNDRY", "IRONING", "CLEANING"
+  name        String
+  isActive    Boolean  @default(true)
+
+  options       ServiceOption[]
+  bookings      Booking[]
+
+  @@unique([countryId, code])
+  @@map("service_categories")
+}
+
+enum PricingUnit {
+  FLAT   // basePrice = prix forfaitaire pour toute la prestation
+  HOURLY // basePrice = prix par heure, multiplié par les heures demandées
+}
+
+model ServiceOption {
+  id                String          @id @default(uuid())
+  serviceCategoryId String
+  serviceCategory   ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
+  code              String
+  name              String
+  // Prix de base pour les services non itemisés (ménage, repassage). Le
+  // service laverie calcule son prix pièce par pièce via GarmentType et
+  // ignore ce champ — voir PricingService.computeLaundryQuote.
+  basePrice         Decimal?        @db.Decimal(10, 2)
+  pricingUnit       PricingUnit     @default(FLAT)
+  isActive          Boolean         @default(true)
+
+  @@map("service_options")
+}
+
+// Catalogue laverie — §21.2 à §21.4. Global par défaut, surchargeable par pays.
+model GarmentType {
+  id           String  @id @default(uuid())
+  countryId    String? // null = valeur globale par défaut
+  code         String
+  name         String
+  basePrice    Decimal @db.Decimal(10, 2)
+  isActive     Boolean @default(true)
+
+  @@map("garment_types")
+}
+
+model FabricCategory {
+  id          String  @id @default(uuid())
+  code        String  @unique // STANDARD, DELICATE, VERY_DELICATE
+  name        String
+  coefficient Decimal @db.Decimal(4, 2) @default(1.00)
+
+  @@map("fabric_categories")
+}
+
+model WashMethod {
+  id          String  @id @default(uuid())
+  code        String  @unique // STANDARD, HAND_ONLY, DELICATE_HAND, SPECIAL
+  name        String
+  coefficient Decimal @db.Decimal(4, 2) @default(1.00)
+
+  @@map("wash_methods")
+}
+
+model StainType {
+  id            String  @id @default(uuid())
+  code          String  @unique // NORMAL, VERY_DIRTY, SPECIFIC_STAIN
+  name          String
+  surchargeType String  // "PERCENT" | "FIXED" | "QUOTE"
+  surchargeValue Decimal? @db.Decimal(10, 2)
+
+  @@map("stain_types")
+}
+
+model PackageDeal {
+  id            String   @id @default(uuid())
+  countryId     String?
+  code          String   // SMALL, MEDIUM, LARGE
+  name          String
+  maxPieces     Int
+  price         Decimal  @db.Decimal(10, 2)
+  // Liste de codes GarmentType exclus du forfait (§21.7). Stocké en JSON :
+  // MariaDB n'a pas de type tableau natif comme PostgreSQL.
+  excludedGarmentCodes Json?
+
+  @@map("package_deals")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TARIFICATION (§5.4, §21) — jamais de valeur codée en dur, tout est versionné
+// ─────────────────────────────────────────────────────────────────────────
+
+model PricingConfig {
+  id            String   @id @default(uuid())
+  countryId     String
+  country       Country  @relation(fields: [countryId], references: [id])
+  version       Int
+  effectiveFrom DateTime
+  isActive      Boolean  @default(false)
+  // Structure libre en JSON : frais_deplacement, frais_plateforme, supplement_urgence,
+  // règles d'arrondi, etc. — évite une migration de schéma à chaque ajustement tarifaire.
+  // Note MariaDB : le type JSON y est un alias LONGTEXT avec contrainte de
+  // validité (pas de type binaire indexable comme PostgreSQL JSONB) — sans
+  // impact ici car on ne fait jamais de requête à l'intérieur de ce champ,
+  // toujours une lecture/écriture de l'objet complet.
+  config        Json
+  createdAt     DateTime @default(now())
+
+  bookings      Booking[]
+
+  @@unique([countryId, version])
+  @@map("pricing_configs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RÉSERVATIONS / MISSIONS — cœur du système (§5, §8.1, Addendum §4)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum BookingStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  SEARCHING_PARTNER
+  PARTNER_ASSIGNED
+  PARTNER_EN_ROUTE
+  ARRIVED
+  PRICE_REVISION_PENDING // ajouté par Addendum technique v1.1 §4
+  IN_PROGRESS
+  COMPLETION_REQUESTED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+model Booking {
+  id                String          @id @default(uuid())
+  clientId          String
+  client            User            @relation("ClientBookings", fields: [clientId], references: [id])
+  addressId         String
+  address           Address         @relation(fields: [addressId], references: [id])
+  zoneId            String
+  zone              Zone            @relation(fields: [zoneId], references: [id])
+  serviceCategoryId String
+  serviceCategory   ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
+  pricingConfigId   String
+  pricingConfig     PricingConfig   @relation(fields: [pricingConfigId], references: [id])
+
+  status            BookingStatus   @default(DRAFT)
+  scheduledAt       DateTime
+  currency          String
+  // Choisi par le client à la confirmation, mais le prélèvement effectif
+  // n'a lieu qu'à l'arrivée du partenaire (§ paiement à l'arrivée) — voir
+  // BookingsService.requestArrivalPayment. Mobile money uniquement, aucun
+  // traitement d'espèces entre client et partenaire.
+  paymentProviderCode String        @default("mtn_momo")
+
+  // Snapshot figé au moment de la confirmation — une évolution ultérieure de la
+  // grille tarifaire ne doit jamais changer rétroactivement ce prix (§21.6).
+  pricingSnapshot   Json
+  estimatedTotal    Decimal         @db.Decimal(10, 2)
+  finalTotal        Decimal?        @db.Decimal(10, 2)
+
+  assignedPartnerId String?
+  assignedPartner   PartnerProfile? @relation("AssignedPartner", fields: [assignedPartnerId], references: [id])
+
+  missionPin        String?         // généré serveur, usage unique — §9
+  missionPinExpiresAt DateTime?
+  // Horodatage de l'arrivée sur place (statut ARRIVED) — sert notamment à
+  // vérifier le délai de carence de 30 min avant qu'un partenaire ne puisse
+  // signaler un non-paiement (voir BookingsService.cancelForNonPayment).
+  arrivedAt         DateTime?
+  missionStartedAt  DateTime?
+  completionRequestedAt DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancellationReason String?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  offers            Offer[]
+  priceRevisions    PriceRevision[]
+  payment           PaymentTransaction?
+  rating            Rating?
+  incidents         Incident[]
+
+  @@index([status])
+  @@map("bookings")
+}
+
+// Révision de prix à l'arrivée — §21.8, formalisée en Addendum §4
+model PriceRevision {
+  id            String    @id @default(uuid())
+  bookingId     String
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+  previousTotal Decimal   @db.Decimal(10, 2)
+  newTotal      Decimal   @db.Decimal(10, 2)
+  reason        String
+  detail        Json?     // écarts déclarés par le partenaire (pièce par pièce)
+  confirmedByClientAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("price_revisions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MATCHING — broadcast + verrou optimiste (Addendum §2)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum OfferStatus {
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  LOST // perdu au profit d'un autre partenaire — Addendum §2.2 étape 5-6
+}
+
+enum OfferChannel {
+  PUSH
+  SMS
+  PUSH_AND_SMS
+}
+
+model Offer {
+  id               String         @id @default(uuid())
+  bookingId        String
+  booking          Booking        @relation(fields: [bookingId], references: [id])
+  partnerProfileId String
+  partnerProfile   PartnerProfile @relation(fields: [partnerProfileId], references: [id])
+  status           OfferStatus    @default(SENT)
+  channel          OfferChannel   @default(PUSH)
+  sentAt           DateTime       @default(now())
+  viewedAt         DateTime?
+  respondedAt      DateTime?
+  expiresAt        DateTime
+
+  @@index([bookingId, status])
+  @@map("offers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PAIEMENTS (§5.5, Addendum §5.4)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  PENDING_CONFIRMATION // ajouté par Addendum §5.4 — confirmation webhook asynchrone MoMo/OM
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model PaymentTransaction {
+  id                 String        @id @default(uuid())
+  bookingId          String        @unique
+  booking            Booking       @relation(fields: [bookingId], references: [id])
+  provider            String       // "mtn_momo" | "orange_money" | "cash" | "bank_transfer"
+  status             PaymentStatus @default(INITIATED)
+  amount             Decimal       @db.Decimal(10, 2)
+  currency           String
+  platformCommission Decimal       @db.Decimal(10, 2)
+  partnerPayout      Decimal       @db.Decimal(10, 2)
+  externalReference  String?       // référence côté fournisseur — utile pour la réconciliation
+  isCash             Boolean       @default(false) // espèces autorisées : trace quand même une transaction — §5.5
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@map("payment_transactions")
+}
+
+model CountryPaymentProvider {
+  id         String   @id @default(uuid())
+  countryId  String
+  country    Country  @relation(fields: [countryId], references: [id])
+  provider   String
+  isActive   Boolean  @default(false)
+  config     Json?    // clés/paramètres non sensibles ; secrets réels via variables d'environnement, jamais en base
+
+  @@unique([countryId, provider])
+  @@map("country_payment_providers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// QUALITÉ, INCIDENTS, AUDIT (§7, §9, §13)
+// ─────────────────────────────────────────────────────────────────────────
+
+model Rating {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  fromUserId  String
+  fromUser    User     @relation("RatingsGiven", fields: [fromUserId], references: [id])
+  toUserId    String
+  toUser      User     @relation("RatingsReceived", fields: [toUserId], references: [id])
+  score       Int      // 1 à 5
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@map("ratings")
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+model Incident {
+  id           String           @id @default(uuid())
+  bookingId    String?
+  booking      Booking?         @relation(fields: [bookingId], references: [id])
+  reporterId   String
+  reporter     User             @relation("IncidentReporter", fields: [reporterId], references: [id])
+  type         String
+  severity     IncidentSeverity @default(LOW)
+  description  String
+  // Clés objet S3, stockées en JSON (tableau de chaînes) — MariaDB n'a pas
+  // de type tableau natif.
+  attachments  Json?
+  internalNotes String?
+  status       IncidentStatus   @default(OPEN)
+  createdAt    DateTime         @default(now())
+  resolvedAt   DateTime?
+
+  @@map("incidents")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String
+  actor       User     @relation(fields: [actorId], references: [id])
+  action      String   // ex: "PARTNER_APPROVED", "PRICING_CONFIG_PUBLISHED"
+  targetType  String
+  targetId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// Persistance des notifications (Addendum §5.6) — le service d'envoi
+// lui-même reste un mock (push/SMS non branchés), mais chaque envoi laisse
+// une trace consultable par son destinataire via GET /notifications.
+model Notification {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  type             String    // ex: "MISSION_OFFER", "OFFER_LOST", "PRICE_REVISION_REQUEST"
+  title            String
+  body             String
+  relatedBookingId String?
+  readAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@map("notifications")
+}

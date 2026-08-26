@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: iris
+      MARIADB_USER: iris
+      MARIADB_PASSWORD: iris_dev_password
+      MARIADB_ROOT_PASSWORD: iris_root_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - iris_db_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./apps/backend
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/backend:/app
+      - /app/node_modules
+
+volumes:
+  iris_db_data:
