@@ -1,4 +1,8 @@
-const BASE_URL = 'http://localhost:3000/api/v1';
+// VITE_API_BASE_URL permet de pointer le Testeur vers le backend déployé
+// (Railway) plutôt que le backend local — nécessaire par exemple pour
+// approuver un partenaire inscrit depuis l'app mobile en conditions réelles
+// (réseau différent de la machine de dev, donc backend public).
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1';
 
 export class ApiError extends Error {}
 
