@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "description": "IRIS API — monolithe modulaire NestJS/TypeScript",
   "scripts": {
-    "build": "nest build",
-    "postinstall": "prisma generate",
+    "build": "prisma generate && nest build",
     "start": "prisma migrate deploy && node dist/src/main",
     "start:dev": "nest start --watch",
     "prisma:generate": "prisma generate",

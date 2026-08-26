@@ -6,7 +6,11 @@
 // santé) est rattachée à Country dès le MVP — voir Addendum §5.1.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Cible explicite en plus de "native" — l'image de build Railway/Nixpacks
+  // ne détecte pas toujours correctement sa version d'OpenSSL, ce qui fait
+  // échouer le moteur Prisma au runtime si le binaire natif ne correspond pas.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
 }
 
 datasource db {
