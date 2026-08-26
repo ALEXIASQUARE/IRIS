@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { apiRequest } from './api';
-import type { Country, Zone } from './types';
+import { apiRequest, BASE_URL } from './api';
+import type { Country, ServiceCategory, Zone } from './types';
 import ClientSpace from './client/ClientSpace';
 import PartnerSpace from './partner/PartnerSpace';
 import AdminSpace from './admin/AdminSpace';
@@ -25,7 +25,28 @@ function AppInner() {
           setError(t('common.noActiveCountryError'));
           return;
         }
-        setCountryId(list[0].id);
+
+        // Un pays avec des zones mais sans catégorie de service configurée
+        // (ex: Belgique/France — géographie ajoutée pour test uniquement,
+        // sans catalogue de services) casse l'écran de réservation dès qu'il
+        // passe avant Cameroun dans le tri alphabétique. Même correctif que
+        // CountriesRepository.findFirstCountryWithZones côté mobile : on
+        // exige aussi au moins une catégorie de service active.
+        let selected: Country | null = null;
+        for (const c of list) {
+          try {
+            const zones = await apiRequest<Zone[]>('GET', `/countries/${c.id}/zones`);
+            if (zones.length === 0) continue;
+            const services = await apiRequest<ServiceCategory[]>('GET', `/services?countryId=${c.id}`);
+            if (services.length > 0) {
+              selected = c;
+              break;
+            }
+          } catch {
+            // pays suivant
+          }
+        }
+        setCountryId((selected ?? list[0]).id);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
@@ -58,7 +79,7 @@ function AppInner() {
     <>
       <h1>{t('common.appTitle')}</h1>
       <p className="muted">
-        {t('common.backendLabel')} <code>http://localhost:3000/api/v1</code>
+        {t('common.backendLabel')} <code>{BASE_URL}</code>
       </p>
 
       {error && <div className="error">{error}</div>}
