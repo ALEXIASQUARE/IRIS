@@ -26,19 +26,22 @@ class CountriesRepository {
 
   // Pas de sélecteur pays/zone dans l'app (voir NewBookingScreen,
   // PartnerHomeScreen) : /countries renvoie tous les pays actifs triés par
-  // nom, mais la plupart n'ont encore aucune zone configurée (seuls
-  // Cameroun et Sénégal en ont à ce jour) — prendre `countries.first`
-  // aveuglément casse dès qu'un pays alphabétiquement antérieur (ex:
-  // Bénin) est actif sans zone. On cherche donc le premier pays qui a
-  // réellement au moins une zone.
+  // nom. Un pays avec des zones mais sans catégorie de service configurée
+  // (ex: Bénin, Côte d'Ivoire — géographie ajoutée avant leur catalogue de
+  // services) affichait "Aucun service disponible" côté client dès qu'il
+  // était alphabétiquement avant le pays réellement prêt (Cameroun) — on
+  // exige donc aussi au moins une catégorie de service active, pas
+  // seulement une zone.
   Future<CountryWithZones> findFirstCountryWithZones() async {
     final countries = await listCountries();
     for (final country in countries) {
       final zones = await listZones(country.id);
-      if (zones.isNotEmpty) {
+      if (zones.isEmpty) continue;
+      final services = await _client.get('/services?countryId=${country.id}') as List<dynamic>;
+      if (services.isNotEmpty) {
         return CountryWithZones(country: country, zones: zones);
       }
     }
-    throw Exception('Aucun pays avec une zone active — service indisponible pour le moment.');
+    throw Exception('Aucun pays avec un service configuré — service indisponible pour le moment.');
   }
 }
