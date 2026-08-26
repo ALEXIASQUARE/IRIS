@@ -1,5 +1,11 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { AuthService } from '../auth.service';
+
+jest.mock('argon2', () => ({
+  hash: jest.fn().mockResolvedValue('new-hash'),
+  verify: jest.fn(),
+}));
 
 // Couvre le correctif : le refresh token était émis (issueTokens) mais
 // aucune route ne l'acceptait — un token d'accès expiré (15 min) bloquait
@@ -9,7 +15,8 @@ import { AuthService } from '../auth.service';
 function buildDeps(overrides: Partial<Record<string, any>> = {}) {
   const prisma = {
     user: {
-      findUnique: jest.fn().mockResolvedValue({ id: 'user-1', role: 'CLIENT', isBlocked: false }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'user-1', role: 'CLIENT', isBlocked: false, passwordHash: 'old-hash' }),
+      update: jest.fn().mockResolvedValue({ id: 'user-1' }),
       ...overrides.prisma?.user,
     },
   };
@@ -68,5 +75,44 @@ describe('AuthService — refresh', () => {
     const service = new AuthService(prisma as any, jwt as any, config as any, otpProvider as any);
 
     await expect(service.refresh('token')).rejects.toThrow(UnauthorizedException);
+  });
+});
+
+// Ajouté après un test terrain (Dschang) : un partenaire n'avait aucun moyen
+// de changer son mot de passe une fois le compte créé.
+describe('AuthService — changePassword', () => {
+  beforeEach(() => {
+    (argon2.verify as jest.Mock).mockReset();
+    (argon2.hash as jest.Mock).mockClear();
+  });
+
+  it('met à jour le hash quand le mot de passe actuel est correct', async () => {
+    (argon2.verify as jest.Mock).mockResolvedValue(true);
+    const { prisma, jwt, config, otpProvider } = buildDeps();
+    const service = new AuthService(prisma as any, jwt as any, config as any, otpProvider as any);
+
+    await service.changePassword('user-1', 'currentPass1', 'newPassword1');
+
+    expect(argon2.verify).toHaveBeenCalledWith('old-hash', 'currentPass1');
+    expect(argon2.hash).toHaveBeenCalledWith('newPassword1');
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { passwordHash: 'new-hash' } });
+  });
+
+  it('lève UnauthorizedException si le mot de passe actuel est incorrect', async () => {
+    (argon2.verify as jest.Mock).mockResolvedValue(false);
+    const { prisma, jwt, config, otpProvider } = buildDeps();
+    const service = new AuthService(prisma as any, jwt as any, config as any, otpProvider as any);
+
+    await expect(service.changePassword('user-1', 'wrong', 'newPassword1')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("lève NotFoundException si l'utilisateur n'existe plus", async () => {
+    const { prisma, jwt, config, otpProvider } = buildDeps({
+      prisma: { user: { findUnique: jest.fn().mockResolvedValue(null) } },
+    });
+    const service = new AuthService(prisma as any, jwt as any, config as any, otpProvider as any);
+
+    await expect(service.changePassword('user-1', 'currentPass1', 'newPassword1')).rejects.toThrow(NotFoundException);
   });
 });

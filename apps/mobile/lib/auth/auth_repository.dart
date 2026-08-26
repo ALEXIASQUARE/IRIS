@@ -58,4 +58,11 @@ class AuthRepository {
     final result = await _client.post('/auth/refresh', body: {'refreshToken': refreshToken});
     return AuthTokens.fromJson(result as Map<String, dynamic>);
   }
+
+  Future<void> changePassword({required String currentPassword, required String newPassword}) {
+    return _client.patch('/auth/password', body: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+  }
 }

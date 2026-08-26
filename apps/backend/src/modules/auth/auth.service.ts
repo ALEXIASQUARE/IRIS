@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException, NotFoundException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
@@ -168,5 +168,25 @@ export class AuthService {
     }
 
     return this.issueTokens(user.id, user.role);
+  }
+
+  // Demandé après un test terrain (Dschang) : un partenaire n'avait aucun
+  // moyen de changer son mot de passe une fois le compte créé. Exige le mot
+  // de passe actuel (comme pour toute route de changement de mot de passe)
+  // même si la session est déjà authentifiée, pour éviter qu'un accès
+  // temporaire au téléphone déverrouillé ne suffise à prendre le compte.
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+
+    const valid = await argon2.verify(user.passwordHash, currentPassword);
+    if (!valid) {
+      throw new UnauthorizedException('Mot de passe actuel incorrect.');
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   }
 }

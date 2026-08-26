@@ -7,6 +7,7 @@ import '../../countries/countries_repository.dart';
 import '../../partners/partners_repository.dart';
 import 'partner_mission_screen.dart';
 import 'partner_offers_screen.dart';
+import 'partner_profile_screen.dart';
 
 // Point d'entrée de l'espace partenaire — même structure que PartnerSpace.tsx
 // (admin-web) : création/mise à jour idempotente du profil au démarrage,
@@ -122,6 +123,27 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
       appBar: AppBar(
         title: const Text('Espace partenaire'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Mon profil',
+            onPressed: _loading
+                ? null
+                : () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PartnerProfileScreen(
+                          currentZoneId: _zoneId,
+                          onZoneChanged: (zone) {
+                            setState(() {
+                              _zoneId = zone.id;
+                              _zoneName = zone.name;
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Se déconnecter',
