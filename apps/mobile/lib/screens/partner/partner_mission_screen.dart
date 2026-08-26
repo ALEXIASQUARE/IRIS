@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../api/api_client.dart';
 import '../../api/api_exception.dart';
 import '../../bookings/bookings_repository.dart';
@@ -39,6 +40,10 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
   String? _error;
   bool _busy = false;
   LatLng? _myPosition;
+  // Distinct de _error : ne bloque pas l'écran, affiché en plus de la carte
+  // — voir LocationTracker.onError. Le partenaire peut toujours ouvrir la
+  // navigation externe (_openExternalNavigation) même si ceci est présent.
+  String? _locationError;
   final _pinController = TextEditingController();
 
   @override
@@ -50,7 +55,13 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
     _locationTracker = LocationTracker(
       PartnersRepository(client),
       onPosition: (lat, lng) {
-        if (mounted) setState(() => _myPosition = LatLng(lat, lng));
+        if (mounted) setState(() {
+          _myPosition = LatLng(lat, lng);
+          _locationError = null;
+        });
+      },
+      onError: (message) {
+        if (mounted) setState(() => _locationError = message);
       },
     );
     _poll();
@@ -79,6 +90,18 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
       }
     } on ApiException catch (e) {
       if (mounted && _booking == null) setState(() => _error = e.message);
+    }
+  }
+
+  // Ouvre la navigation dans Google Maps (ou l'application de cartes par
+  // défaut) — indépendant du GPS/du routage interne (OSRM) : c'est ce qui
+  // permet réellement au partenaire de se mettre en route (guidage vocal,
+  // trafic en direct), la carte intégrée n'étant qu'un aperçu.
+  Future<void> _openExternalNavigation(double lat, double lng) async {
+    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      setState(() => _error = "Impossible d'ouvrir l'application de navigation.");
     }
   }
 
@@ -119,6 +142,16 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
             RouteMapView(
               origin: _myPosition,
               destination: LatLng(booking.address!.latitude, booking.address!.longitude),
+            ),
+            const SizedBox(height: 8),
+            if (_locationError != null) ...[
+              Text(_locationError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13)),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: () => _openExternalNavigation(booking.address!.latitude, booking.address!.longitude),
+              icon: const Icon(Icons.navigation),
+              label: const Text("Ouvrir l'itinéraire (Google Maps)"),
             ),
             const SizedBox(height: 16),
           ],
