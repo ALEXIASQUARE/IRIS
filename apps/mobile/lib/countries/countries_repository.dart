@@ -24,6 +24,17 @@ class CountriesRepository {
     return result.map((e) => Zone.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // Résout une zone par id, quel que soit son pays — contrairement à
+  // listZones(country.id), ne suppose pas que la zone appartient au pays
+  // "prêt" (voir findFirstCountryWithZones). Nécessaire pour afficher/
+  // resynchroniser la zone déjà enregistrée d'un profil existant, qui peut
+  // appartenir à un pays de test sans catalogue de services (Belgique,
+  // France) — voir PartnerHomeScreen._init pour le bug que ça corrige.
+  Future<Zone> getZone(String zoneId) async {
+    final result = await _client.get('/zones/$zoneId');
+    return Zone.fromJson(result as Map<String, dynamic>);
+  }
+
   // Pas de sélecteur pays/zone dans l'app (voir NewBookingScreen,
   // PartnerHomeScreen) : /countries renvoie tous les pays actifs triés par
   // nom. Un pays avec des zones mais sans catégorie de service configurée

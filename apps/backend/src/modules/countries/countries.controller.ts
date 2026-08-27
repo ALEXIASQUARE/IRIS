@@ -18,4 +18,9 @@ export class CountriesController {
   listZones(@Param('id') id: string) {
     return this.countries.listZones(id);
   }
+
+  @Get('zones/:id')
+  getZone(@Param('id') id: string) {
+    return this.countries.getZone(id);
+  }
 }

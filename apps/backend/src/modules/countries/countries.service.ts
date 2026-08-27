@@ -21,6 +21,23 @@ export class CountriesService {
     });
   }
 
+  // Résout une zone par son id, quel que soit son pays — nécessaire pour
+  // afficher/résoudre la zone déjà enregistrée d'un partenaire ou d'un
+  // client, qui peut appartenir à un pays sans catalogue de services actif
+  // (ex: Belgique/France, géographie ajoutée pour test uniquement) et donc
+  // ne jamais apparaître dans le résultat de findFirstCountryWithZones côté
+  // app. Utiliser listZones(country.id) pour ce cas revenait à chercher la
+  // zone dans la mauvaise liste et retombait silencieusement sur la
+  // première zone du pays "prêt" — voir PartnerHomeScreen._init.
+  async getZone(zoneId: string) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: zoneId },
+      select: { id: true, name: true, cityName: true, centerLat: true, centerLng: true, countryId: true, isActive: true },
+    });
+    if (!zone) throw new NotFoundException('Zone introuvable.');
+    return zone;
+  }
+
   // ── Gestion admin pays/zones ─────────────────────────────────────────
   listAllCountries() {
     return this.prisma.country.findMany({ orderBy: { name: 'asc' } });
