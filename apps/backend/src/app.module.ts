@@ -11,6 +11,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { ClientModule } from './modules/client/client.module';
 import { CountriesModule } from './modules/countries/countries.module';
 import { ServicesCatalogModule } from './modules/services-catalog/services-catalog.module';
 import { PricingModule } from './modules/pricing/pricing.module';
@@ -34,6 +35,7 @@ import { NotificationModule } from './modules/notifications/notification.module'
 
     AuthModule,
     UsersModule,
+    ClientModule,
     CountriesModule,
     ServicesCatalogModule,
     PricingModule,

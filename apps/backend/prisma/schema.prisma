@@ -62,6 +62,7 @@ model Zone {
 
   addresses     Address[]
   bookings      Booking[]
+  clientsWithHomeZone User[]
 
   @@map("zones")
 }
@@ -93,6 +94,12 @@ model User {
   isBlocked         Boolean   @default(false)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  // Ville/quartier par défaut du client (profil) — sert à préremplir la
+  // zone de tarification et des nouvelles adresses (voir NewBookingScreen),
+  // modifiable à tout moment côté client comme la zone du partenaire.
+  homeZoneId        String?
+  homeZone          Zone?     @relation(fields: [homeZoneId], references: [id])
 
   addresses         Address[]
   partnerProfile    PartnerProfile?

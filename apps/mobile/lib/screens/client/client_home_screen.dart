@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../auth/auth_state.dart';
 import 'booking_status_screen.dart';
+import 'client_profile_screen.dart';
 import 'new_booking_screen.dart';
 
 // Point d'entrée de l'espace client — bascule entre une nouvelle réservation
@@ -25,6 +26,13 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       appBar: AppBar(
         title: Text(_bookingId == null ? 'Nouvelle réservation' : 'Ma réservation'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Mon profil',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ClientProfileScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Se déconnecter',

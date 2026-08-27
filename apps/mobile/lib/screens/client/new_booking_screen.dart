@@ -6,6 +6,7 @@ import '../../api/api_client.dart';
 import '../../api/api_exception.dart';
 import '../../bookings/bookings_repository.dart';
 import '../../catalog/catalog_repository.dart';
+import '../../client/client_repository.dart';
 import '../../countries/countries_repository.dart';
 import '../../models/address.dart';
 import '../../models/catalog.dart';
@@ -49,6 +50,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   late final PricingRepository _pricing;
   late final BookingsRepository _bookings;
   late final CountriesRepository _countries;
+  late final ClientRepository _clientRepo;
 
   bool _loading = true;
   String? _error;
@@ -107,6 +109,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     _pricing = PricingRepository(client);
     _bookings = BookingsRepository(client);
     _countries = CountriesRepository(client);
+    _clientRepo = ClientRepository(client);
     _load();
   }
 
@@ -129,7 +132,21 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       // réellement des zones configurées (voir CountriesRepository).
       final countryWithZones = await _countries.findFirstCountryWithZones();
       final countryId = countryWithZones.country.id;
-      final zoneId = countryWithZones.zones.first.id;
+
+      // Ville/quartier par défaut du client (voir ClientProfileScreen) si
+      // renseignée, sinon repli sur la première zone du pays — comme avant
+      // l'ajout du profil. Best-effort : ne bloque jamais la réservation si
+      // cet appel échoue (réseau, etc.).
+      String zoneId = countryWithZones.zones.first.id;
+      try {
+        final profile = await _clientRepo.getProfile();
+        final homeZoneId = profile.homeZoneId;
+        if (homeZoneId != null && countryWithZones.zones.any((z) => z.id == homeZoneId)) {
+          zoneId = homeZoneId;
+        }
+      } catch (_) {
+        // repli sur la première zone déjà appliqué ci-dessus
+      }
 
       final services = await _catalog.listServices(countryId);
 
