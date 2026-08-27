@@ -109,6 +109,16 @@ export default function AdminGeo({ token }: { token: string }) {
   }
 
   async function toggleCountryActive(c: AdminCountry) {
+    // Désactiver un pays le retire de /countries -- s'il a des zones/un
+    // catalogue actifs, ça casse le choix "premier pays prêt" pour TOUS les
+    // clients/partenaires déjà enregistrés là (voir
+    // CountriesRepository.findFirstCountryWithZones côté mobile), pas
+    // seulement les nouveaux comptes. C'est déjà arrivé deux fois par clic
+    // accidentel (voir journal d'audit) — d'où la confirmation, uniquement
+    // à la désactivation (l'activation est toujours sans risque).
+    if (c.isActive && !window.confirm(t('admin.confirmDeactivateCountry', { name: c.name }))) {
+      return;
+    }
     setError(null);
     try {
       await apiRequest('PATCH', `/admin/countries/${c.id}`, { token, body: { isActive: !c.isActive } });
