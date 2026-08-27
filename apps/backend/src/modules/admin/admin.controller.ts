@@ -30,6 +30,21 @@ export class AdminController {
     return this.admin.suspendPartner(id, user.id);
   }
 
+  @Get('clients')
+  listClients() {
+    return this.admin.listClients();
+  }
+
+  @Post('clients/:id/block')
+  blockClient(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.admin.blockClient(id, user.id);
+  }
+
+  @Post('clients/:id/unblock')
+  unblockClient(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.admin.unblockClient(id, user.id);
+  }
+
   @Get('incidents')
   listIncidents(@Query('status') status?: IncidentStatus) {
     return this.admin.listIncidents(status);

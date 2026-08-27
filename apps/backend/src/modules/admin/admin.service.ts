@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { BookingStatus, IncidentStatus, PartnerStatus } from '@prisma/client';
+import { BookingStatus, IncidentStatus, PartnerStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ResolveIncidentDto } from './dto/resolve-incident.dto';
@@ -62,6 +62,47 @@ export class AdminService {
     });
 
     await this.audit.log(adminUserId, 'PARTNER_SUSPENDED', 'PartnerProfile', partnerId);
+    return updated;
+  }
+
+  // Vue d'ensemble des comptes client — pendant de listPartners, sans les
+  // statuts d'agrément (un client n'a rien à approuver) mais avec le même
+  // besoin de voir qui a un compte et de pouvoir en bloquer un abusif.
+  listClients() {
+    return this.prisma.user.findMany({
+      where: { role: UserRole.CLIENT },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        isBlocked: true,
+        createdAt: true,
+        homeZone: { select: { cityName: true, name: true } },
+        _count: { select: { bookingsAsClient: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async blockClient(userId: string, adminUserId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Client introuvable.');
+    if (user.role !== UserRole.CLIENT) throw new NotFoundException('Client introuvable.');
+
+    const updated = await this.prisma.user.update({ where: { id: userId }, data: { isBlocked: true } });
+    await this.audit.log(adminUserId, 'CLIENT_BLOCKED', 'User', userId);
+    return updated;
+  }
+
+  async unblockClient(userId: string, adminUserId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Client introuvable.');
+    if (user.role !== UserRole.CLIENT) throw new NotFoundException('Client introuvable.');
+
+    const updated = await this.prisma.user.update({ where: { id: userId }, data: { isBlocked: false } });
+    await this.audit.log(adminUserId, 'CLIENT_UNBLOCKED', 'User', userId);
     return updated;
   }
 

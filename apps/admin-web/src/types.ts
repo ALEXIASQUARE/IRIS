@@ -153,6 +153,18 @@ export interface AdminPartner {
   user: { firstName: string; lastName: string; phone: string; email?: string | null };
 }
 
+export interface AdminClient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string | null;
+  isBlocked: boolean;
+  createdAt: string;
+  homeZone?: { cityName: string; name: string } | null;
+  _count: { bookingsAsClient: number };
+}
+
 export interface AdminBookingListItem {
   id: string;
   status: BookingStatus;

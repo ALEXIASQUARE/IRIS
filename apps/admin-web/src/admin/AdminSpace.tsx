@@ -3,6 +3,7 @@ import type { Country } from '../types';
 import AdminAuth from './AdminAuth';
 import AdminDashboard from './AdminDashboard';
 import AdminPartners from './AdminPartners';
+import AdminClients from './AdminClients';
 import AdminIncidents from './AdminIncidents';
 import AdminAuditLog from './AdminAuditLog';
 import AdminCatalog from './AdminCatalog';
@@ -12,7 +13,7 @@ import { useTranslation } from '../i18n/I18nContext';
 
 const TOKEN_KEY = 'iris_admin_token';
 
-type Tab = 'dashboard' | 'bookings' | 'partners' | 'incidents' | 'audit' | 'catalog' | 'geo';
+type Tab = 'dashboard' | 'bookings' | 'partners' | 'clients' | 'incidents' | 'audit' | 'catalog' | 'geo';
 
 export default function AdminSpace({ country }: { country: Country }) {
   const { t } = useTranslation();
@@ -54,6 +55,9 @@ export default function AdminSpace({ country }: { country: Country }) {
         <button className={`tab ${tab === 'partners' ? 'active' : ''}`} onClick={() => setTab('partners')}>
           {t('admin.tabPartners')}
         </button>
+        <button className={`tab ${tab === 'clients' ? 'active' : ''}`} onClick={() => setTab('clients')}>
+          {t('admin.tabClients')}
+        </button>
         <button className={`tab ${tab === 'incidents' ? 'active' : ''}`} onClick={() => setTab('incidents')}>
           {t('admin.tabIncidents')}
         </button>
@@ -71,6 +75,7 @@ export default function AdminSpace({ country }: { country: Country }) {
       {tab === 'dashboard' && <AdminDashboard token={token} />}
       {tab === 'bookings' && <AdminBookings token={token} />}
       {tab === 'partners' && <AdminPartners token={token} />}
+      {tab === 'clients' && <AdminClients token={token} />}
       {tab === 'incidents' && <AdminIncidents token={token} />}
       {tab === 'audit' && <AdminAuditLog token={token} />}
       {tab === 'catalog' && <AdminCatalog token={token} />}
