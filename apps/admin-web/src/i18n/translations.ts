@@ -131,6 +131,8 @@ const fr = {
     requestPayment: 'Demander le paiement au client',
     paymentRequested: 'Demande de paiement envoyée — en attente de confirmation du client…',
     paymentDone: 'Paiement effectué.',
+    abandonMission: 'Abandonner la mission',
+    confirmAbandon: 'Abandonner cette mission ? Elle redeviendra disponible pour un autre partenaire.',
   },
   admin: {
     connectedAs: "Connecté en tant qu'admin",
@@ -401,6 +403,8 @@ const en: Dict = {
     requestPayment: 'Request payment from the client',
     paymentRequested: 'Payment request sent — waiting for client confirmation…',
     paymentDone: 'Payment received.',
+    abandonMission: 'Abandon mission',
+    confirmAbandon: 'Abandon this mission? It will become available to another partner.',
   },
   admin: {
     connectedAs: 'Logged in as admin',
@@ -669,6 +673,8 @@ const es: Dict = {
     requestPayment: 'Solicitar el pago al cliente',
     paymentRequested: 'Solicitud de pago enviada — esperando confirmación del cliente…',
     paymentDone: 'Pago realizado.',
+    abandonMission: 'Abandonar la misión',
+    confirmAbandon: '¿Abandonar esta misión? Quedará disponible para otro socio.',
   },
   admin: {
     connectedAs: 'Conectado como admin',
@@ -937,6 +943,8 @@ const pt: Dict = {
     requestPayment: 'Solicitar o pagamento ao cliente',
     paymentRequested: 'Solicitação de pagamento enviada — aguardando confirmação do cliente…',
     paymentDone: 'Pagamento efetuado.',
+    abandonMission: 'Abandonar a missão',
+    confirmAbandon: 'Abandonar esta missão? Ela ficará disponível para outro parceiro.',
   },
   admin: {
     connectedAs: 'Conectado como admin',
@@ -1205,6 +1213,8 @@ const ar: Dict = {
     requestPayment: 'طلب الدفع من العميل',
     paymentRequested: '.تم إرسال طلب الدفع — بانتظار تأكيد العميل',
     paymentDone: '.تم الدفع',
+    abandonMission: 'التخلي عن المهمة',
+    confirmAbandon: 'هل تريد التخلي عن هذه المهمة؟ ستصبح متاحة لشريك آخر.',
   },
   admin: {
     connectedAs: 'متصل كمسؤول',

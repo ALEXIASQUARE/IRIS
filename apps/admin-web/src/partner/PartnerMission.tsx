@@ -4,6 +4,11 @@ import type { Booking } from '../types';
 import IncidentReportForm from '../IncidentReportForm';
 import { useTranslation } from '../i18n/I18nContext';
 
+// Statuts depuis lesquels le partenaire peut abandonner la mission avant
+// paiement — voir MissionsService.abandonMission côté backend : elle
+// redevient disponible pour d'autres partenaires plutôt que d'être annulée.
+const ABANDONABLE_STATUSES = ['PARTNER_ASSIGNED', 'PARTNER_EN_ROUTE', 'ARRIVED', 'PENDING_PAYMENT'];
+
 export default function PartnerMission({
   token,
   bookingId,
@@ -47,13 +52,23 @@ export default function PartnerMission({
     };
   }, [bookingId, token]);
 
-  async function call(path: string, body?: unknown) {
+  async function abandon() {
+    if (!window.confirm(t('partner.confirmAbandon'))) return;
+    // Ne quitte l'écran que si l'appel a réussi — sinon l'erreur (ex:
+    // mission déjà payée, plus abandonnable) resterait invisible.
+    const ok = await call(`/missions/${bookingId}/abandon`);
+    if (ok) onDone();
+  }
+
+  async function call(path: string, body?: unknown): Promise<boolean> {
     setError(null);
     setLoading(true);
     try {
       await apiRequest('POST', path, { token, body });
+      return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -136,6 +151,12 @@ export default function PartnerMission({
             {t('partner.backToOffers')}
           </button>
         </>
+      )}
+
+      {ABANDONABLE_STATUSES.includes(booking.status) && (
+        <button className="danger" onClick={abandon} disabled={loading}>
+          {t('partner.abandonMission')}
+        </button>
       )}
 
       {booking.status !== 'CANCELLED' && <IncidentReportForm token={token} bookingId={bookingId} />}

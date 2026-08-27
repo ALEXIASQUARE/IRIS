@@ -48,6 +48,15 @@ export class MissionsController {
     await this.missionsService.completeMission(bookingId, user.id);
   }
 
+  // Le partenaire abandonne la mission avant paiement — elle redevient
+  // disponible pour les autres partenaires au lieu d'être annulée. Voir
+  // MissionsService.abandonMission.
+  @Roles(UserRole.PARTNER)
+  @Post("missions/:bookingId/abandon")
+  async abandonMission(@Param("bookingId") bookingId: string, @CurrentUser() user: { id: string }) {
+    await this.missionsService.abandonMission(bookingId, user.id);
+  }
+
   @Roles(UserRole.PARTNER)
   @Post("missions/:bookingId/start")
   startMission(

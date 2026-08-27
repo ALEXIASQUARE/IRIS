@@ -389,6 +389,62 @@ export class MissionsService {
     });
   }
 
+  // ── Abandon de mission (avant paiement) ─────────────────────────────────
+  // Si le partenaire abandonne en chemin (imprévu, changement d'avis...)
+  // avant que le client ait payé, la mission doit redevenir disponible
+  // pour les autres partenaires au lieu de rester bloquée indéfiniment sur
+  // ce partenaire — retour utilisateur explicite : seule l'absence de
+  // paiement du client passé les 30 minutes prescrites
+  // (BookingsService.cancelForNonPayment) doit annuler la réservation ;
+  // un abandon côté partenaire doit la remettre en recherche, jamais
+  // l'annuler.
+  async abandonMission(bookingId: string, partnerUserId: string): Promise<void> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { assignedPartner: true },
+    });
+    if (!booking) throw new NotFoundException('Mission introuvable.');
+    if (booking.assignedPartner?.userId !== partnerUserId) {
+      throw new ForbiddenException("Ce partenaire n'est pas assigné à cette mission.");
+    }
+
+    const abandonableStatuses: BookingStatus[] = [
+      BookingStatus.PARTNER_ASSIGNED,
+      BookingStatus.PARTNER_EN_ROUTE,
+      BookingStatus.ARRIVED,
+      BookingStatus.PENDING_PAYMENT,
+    ];
+    if (!abandonableStatuses.includes(booking.status)) {
+      throw new ConflictException("Cette mission ne peut plus être abandonnée à ce stade.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: BookingStatus.SEARCHING_PARTNER,
+          assignedPartnerId: null,
+          arrivedAt: null,
+          missionPin: null,
+          missionPinExpiresAt: null,
+        },
+      }),
+      // Redevient disponible pour de nouvelles offres — même logique que
+      // completeMission/BookingsService.cancelBooking.
+      this.prisma.partnerProfile.update({
+        where: { id: booking.assignedPartnerId! },
+        data: { isAvailable: true },
+      }),
+    ]);
+
+    // Relance la diffusion immédiatement, sans attendre le prochain cycle
+    // du job planifié (expireStaleOffersAndRetry) — le client ne doit pas
+    // attendre inutilement qu'un partenaire abandonne sans recours.
+    await this.searchAndBroadcastPartner(bookingId).catch((err) => {
+      this.logger.error(`Échec de la relance après abandon de la mission ${bookingId}`, err as Error);
+    });
+  }
+
   // ── Fin de mission ───────────────────────────────────────────────────
   // On saute l'état intermédiaire COMPLETION_REQUESTED (prévu par le
   // schéma pour une confirmation client) pour rester simple — même logique

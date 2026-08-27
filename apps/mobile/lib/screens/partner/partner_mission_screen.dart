@@ -31,6 +31,12 @@ class PartnerMissionScreen extends StatefulWidget {
 // position GPS est envoyée en direct et la carte de trajet est affichée.
 const _trackingStatuses = {'PARTNER_ASSIGNED', 'PARTNER_EN_ROUTE'};
 
+// Statuts depuis lesquels le partenaire peut abandonner la mission — voir
+// MissionsService.abandonMission côté backend : avant paiement uniquement,
+// la mission redevient disponible pour d'autres partenaires plutôt que
+// d'être annulée.
+const _abandonableStatuses = {'PARTNER_ASSIGNED', 'PARTNER_EN_ROUTE', 'ARRIVED', 'PENDING_PAYMENT'};
+
 class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
   late final BookingsRepository _bookings;
   late final MissionsRepository _missions;
@@ -102,6 +108,41 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       setState(() => _error = "Impossible d'ouvrir l'application de navigation.");
+    }
+  }
+
+  Future<void> _abandonMission() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Abandonner la mission ?'),
+        content: const Text(
+          'La mission redeviendra disponible pour un autre partenaire. '
+          'À utiliser uniquement si vous ne pouvez pas terminer cette mission.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Abandonner'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _missions.abandonMission(widget.bookingId);
+      widget.onDone();
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -208,6 +249,14 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
             Text('Commande annulée.', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             const SizedBox(height: 8),
             OutlinedButton(onPressed: widget.onDone, child: const Text('Retour aux offres')),
+          ],
+          if (_abandonableStatuses.contains(booking.status)) ...[
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _busy ? null : _abandonMission,
+              style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+              child: const Text('Abandonner la mission'),
+            ),
           ],
           if (booking.status != 'CANCELLED') IncidentReportForm(bookingId: widget.bookingId),
         ],

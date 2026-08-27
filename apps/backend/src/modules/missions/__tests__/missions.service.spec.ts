@@ -1,5 +1,5 @@
 import { MissionsService } from '../missions.service';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { BookingStatus, OfferStatus } from '@prisma/client';
 
 // Test central du module missions : garantit l'exigence du Cahier des
@@ -276,4 +276,87 @@ describe('MissionsService — completeMission (libération du partenaire)', () =
       data: { isAvailable: true },
     });
   });
+});
+
+// Retour utilisateur explicite : si le partenaire abandonne en chemin
+// avant paiement, la mission doit redevenir disponible pour les autres
+// partenaires (SEARCHING_PARTNER) — jamais être annulée. Seule l'absence
+// de paiement du client passé les 30 minutes prescrites
+// (BookingsService.cancelForNonPayment) doit annuler la réservation.
+describe('MissionsService — abandonMission (remise en recherche, jamais annulation)', () => {
+  function buildPrisma(status: BookingStatus) {
+    return {
+      booking: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'booking-1',
+          status,
+          assignedPartnerId: 'partner-1',
+          assignedPartner: { userId: 'partner-user-1' },
+        }),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      offer: { create: jest.fn().mockResolvedValue({ id: 'offer-x' }), findMany: jest.fn().mockResolvedValue([]) },
+      zone: { findUnique: jest.fn().mockResolvedValue(null) },
+      partnerProfile: { update: jest.fn().mockResolvedValue({}) },
+      $transaction: jest.fn((ops) => Promise.all(ops)),
+    };
+  }
+
+  it.each([
+    BookingStatus.PARTNER_ASSIGNED,
+    BookingStatus.PARTNER_EN_ROUTE,
+    BookingStatus.ARRIVED,
+    BookingStatus.PENDING_PAYMENT,
+  ])('remet la mission en SEARCHING_PARTNER et libère le partenaire depuis %s', async (status) => {
+    const prisma = buildPrisma(status);
+    const service = new MissionsService(prisma as any, {} as any);
+    jest.spyOn(service, 'searchAndBroadcastPartner').mockResolvedValue(undefined);
+
+    await service.abandonMission('booking-1', 'partner-user-1');
+
+    expect(prisma.booking.update).toHaveBeenCalledWith({
+      where: { id: 'booking-1' },
+      data: {
+        status: BookingStatus.SEARCHING_PARTNER,
+        assignedPartnerId: null,
+        arrivedAt: null,
+        missionPin: null,
+        missionPinExpiresAt: null,
+      },
+    });
+    expect(prisma.partnerProfile.update).toHaveBeenCalledWith({
+      where: { id: 'partner-1' },
+      data: { isAvailable: true },
+    });
+  });
+
+  it('relance immédiatement la diffusion après un abandon', async () => {
+    const prisma = buildPrisma(BookingStatus.PARTNER_EN_ROUTE);
+    const service = new MissionsService(prisma as any, {} as any);
+    const spy = jest.spyOn(service, 'searchAndBroadcastPartner').mockResolvedValue(undefined);
+
+    await service.abandonMission('booking-1', 'partner-user-1');
+
+    expect(spy).toHaveBeenCalledWith('booking-1');
+  });
+
+  it('refuse si le partenaire ne correspond pas à celui assigné', async () => {
+    const prisma = buildPrisma(BookingStatus.PARTNER_EN_ROUTE);
+    const service = new MissionsService(prisma as any, {} as any);
+
+    await expect(service.abandonMission('booking-1', 'un-autre-partenaire')).rejects.toThrow(ForbiddenException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([BookingStatus.PAID, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED, BookingStatus.SEARCHING_PARTNER])(
+    "refuse l'abandon une fois passé le statut %s",
+    async (status) => {
+      const prisma = buildPrisma(status);
+      const service = new MissionsService(prisma as any, {} as any);
+
+      await expect(service.abandonMission('booking-1', 'partner-user-1')).rejects.toThrow(ConflictException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
 });

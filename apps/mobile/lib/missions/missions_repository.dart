@@ -34,4 +34,10 @@ class MissionsRepository {
   Future<void> completeMission(String bookingId) {
     return _client.post('/missions/$bookingId/complete');
   }
+
+  // Le partenaire abandonne avant paiement — la mission redevient
+  // disponible pour les autres partenaires au lieu d'être annulée.
+  Future<void> abandonMission(String bookingId) {
+    return _client.post('/missions/$bookingId/abandon');
+  }
 }
