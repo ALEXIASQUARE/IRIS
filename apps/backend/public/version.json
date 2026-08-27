@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "version": "1.1.1",
+  "versionCode": 4,
+  "version": "1.2.0",
   "apkUrl": "https://backend-production-21788.up.railway.app/latest.apk",
-  "notes": "Correction : la zone d'un partenaire pouvait s'afficher à tort comme \"Abang\"."
+  "notes": "Nouveau : le partenaire peut abandonner une mission avant paiement — elle redevient disponible pour un autre partenaire."
 }
