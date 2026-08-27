@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, ApiError } from '../api';
-import type { AdminPartner } from '../types';
+import type { AdminPartner, PartnerStatus } from '../types';
 import { useTranslation } from '../i18n/I18nContext';
 
-export default function AdminPartners({ token }: { token: string }) {
+const ALL_PARTNER_STATUSES: PartnerStatus[] = [
+  'PENDING_REVIEW',
+  'APPROVED',
+  'REJECTED',
+  'ACTIVE',
+  'SUSPENDED',
+  'DEACTIVATED',
+];
+
+export default function AdminPartners({
+  token,
+  initialStatusFilter,
+}: {
+  token: string;
+  initialStatusFilter?: PartnerStatus;
+}) {
   const { t } = useTranslation();
   const [partners, setPartners] = useState<AdminPartner[]>([]);
+  const [statusFilter, setStatusFilter] = useState<PartnerStatus | ''>(initialStatusFilter ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
     try {
-      const list = await apiRequest<AdminPartner[]>('GET', '/admin/partners', { token });
+      const qs = statusFilter ? `?status=${statusFilter}` : '';
+      const list = await apiRequest<AdminPartner[]>('GET', `/admin/partners${qs}`, { token });
       setPartners(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -23,7 +40,7 @@ export default function AdminPartners({ token }: { token: string }) {
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, statusFilter]);
 
   async function approve(id: string) {
     setBusyId(id);
@@ -55,6 +72,23 @@ export default function AdminPartners({ token }: { token: string }) {
     <div className="card">
       <h2>{t('admin.partnersTitle')}</h2>
       {error && <div className="error">{error}</div>}
+
+      <div className="row" style={{ marginBottom: 12 }}>
+        <div className="field">
+          <label>{t('admin.bookingsStatusFilter')}</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as PartnerStatus | '')}
+          >
+            <option value="">{t('admin.bookingsAllStatuses')}</option>
+            {ALL_PARTNER_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {partners.length === 0 ? (
         <p className="muted">{t('admin.noPartners')}</p>

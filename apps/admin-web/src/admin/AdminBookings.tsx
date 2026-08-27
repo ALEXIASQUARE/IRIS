@@ -23,10 +23,16 @@ const ALL_STATUSES: BookingStatus[] = [
 // client comme partenaire, et le détail de la transaction (moyen, montants,
 // commission) — répond au besoin de visualiser les paiements de bout en
 // bout sans avoir à interroger la base directement.
-export default function AdminBookings({ token }: { token: string }) {
+export default function AdminBookings({
+  token,
+  initialStatusFilter,
+}: {
+  token: string;
+  initialStatusFilter?: BookingStatus;
+}) {
   const { t } = useTranslation();
   const [list, setList] = useState<AdminBookingList | null>(null);
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | ''>('');
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | ''>(initialStatusFilter ?? '');
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 

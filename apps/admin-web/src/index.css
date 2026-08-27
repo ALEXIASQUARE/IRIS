@@ -178,6 +178,17 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+.item-list li.clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 0 -8px;
+  padding: 8px;
+}
+
+.item-list li.clickable:hover {
+  background: var(--bg);
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;

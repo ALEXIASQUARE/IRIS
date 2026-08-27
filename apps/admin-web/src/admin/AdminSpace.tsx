@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Country } from '../types';
+import type { BookingStatus, Country, PartnerStatus } from '../types';
 import AdminAuth from './AdminAuth';
 import AdminDashboard from './AdminDashboard';
 import AdminPartners from './AdminPartners';
@@ -19,6 +19,28 @@ export default function AdminSpace({ country }: { country: Country }) {
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [tab, setTab] = useState<Tab>('dashboard');
+
+  // Permet au tableau de bord de renvoyer directement vers la liste
+  // correspondante, filtrée sur la ligne cliquée (ex: "PENDING_REVIEW" sous
+  // "Partenaires par statut" -> onglet Partenaires filtré sur ce statut) —
+  // réinitialisé à chaque navigation pour ne pas garder un filtre d'une
+  // visite précédente au tableau de bord.
+  const [pendingBookingStatus, setPendingBookingStatus] = useState<BookingStatus | undefined>();
+  const [pendingPartnerStatus, setPendingPartnerStatus] = useState<PartnerStatus | undefined>();
+
+  function navigateToBookings(status?: BookingStatus) {
+    setPendingBookingStatus(status);
+    setTab('bookings');
+  }
+
+  function navigateToPartners(status?: PartnerStatus) {
+    setPendingPartnerStatus(status);
+    setTab('partners');
+  }
+
+  function navigateToClients() {
+    setTab('clients');
+  }
 
   function handleAuth(newToken: string) {
     localStorage.setItem(TOKEN_KEY, newToken);
@@ -72,9 +94,16 @@ export default function AdminSpace({ country }: { country: Country }) {
         </button>
       </div>
 
-      {tab === 'dashboard' && <AdminDashboard token={token} />}
-      {tab === 'bookings' && <AdminBookings token={token} />}
-      {tab === 'partners' && <AdminPartners token={token} />}
+      {tab === 'dashboard' && (
+        <AdminDashboard
+          token={token}
+          onNavigateBookings={navigateToBookings}
+          onNavigatePartners={navigateToPartners}
+          onNavigateClients={navigateToClients}
+        />
+      )}
+      {tab === 'bookings' && <AdminBookings token={token} initialStatusFilter={pendingBookingStatus} />}
+      {tab === 'partners' && <AdminPartners token={token} initialStatusFilter={pendingPartnerStatus} />}
       {tab === 'clients' && <AdminClients token={token} />}
       {tab === 'incidents' && <AdminIncidents token={token} />}
       {tab === 'audit' && <AdminAuditLog token={token} />}
