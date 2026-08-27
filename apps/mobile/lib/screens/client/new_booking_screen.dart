@@ -139,26 +139,42 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       _error = null;
     });
     try {
-      // Pas de sélecteur pays/zone dans l'app (même simplification que
-      // App.tsx côté admin-web) : on prend le premier pays qui a
-      // réellement des zones configurées (voir CountriesRepository).
-      final countryWithZones = await _countries.findFirstCountryWithZones();
-      final countryId = countryWithZones.country.id;
-
-      // Ville/quartier par défaut du client (voir ClientProfileScreen) si
-      // renseignée, sinon repli sur la première zone du pays — comme avant
-      // l'ajout du profil. Best-effort : ne bloque jamais la réservation si
-      // cet appel échoue (réseau, etc.).
-      String zoneId = countryWithZones.zones.first.id;
+      // Résout d'abord le pays à partir de la ville/quartier déjà
+      // enregistrée dans le profil du client (voir ClientProfileScreen) —
+      // une fois le profil renseigné, la réservation doit proposer les
+      // villes et quartiers du VRAI pays du client, pas systématiquement
+      // celui du catalogue par défaut (Cameroun). Repli sur le premier pays
+      // "prêt" (zones + catalogue de services actif) si le profil n'a pas
+      // encore de zone enregistrée — même simplification que App.tsx côté
+      // admin-web pour ce seul cas de repli.
+      Zone? homeZone;
       try {
         final profile = await _clientRepo.getProfile();
         final homeZoneId = profile.homeZoneId;
-        if (homeZoneId != null && countryWithZones.zones.any((z) => z.id == homeZoneId)) {
-          zoneId = homeZoneId;
+        if (homeZoneId != null) {
+          homeZone = await _countries.getZone(homeZoneId);
         }
       } catch (_) {
-        // repli sur la première zone déjà appliqué ci-dessus
+        // repli sur le pays "prêt" ci-dessous
       }
+
+      final String countryId;
+      List<Zone> zones;
+      if (homeZone != null && homeZone.countryId != null) {
+        countryId = homeZone.countryId!;
+        zones = await _countries.listZones(countryId);
+      } else {
+        final countryWithZones = await _countries.findFirstCountryWithZones();
+        countryId = countryWithZones.country.id;
+        zones = countryWithZones.zones;
+      }
+      if (zones.isEmpty) {
+        throw ApiException(0, 'Aucune zone configurée pour votre pays pour le moment.');
+      }
+
+      final zoneId = (homeZone != null && zones.any((z) => z.id == homeZone!.id))
+          ? homeZone.id
+          : zones.first.id;
 
       final services = await _catalog.listServices(countryId);
 
@@ -170,11 +186,11 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         _addresses.list(),
       ]);
 
-      final resolvedZone = countryWithZones.zones.firstWhere((z) => z.id == zoneId);
+      final resolvedZone = zones.firstWhere((z) => z.id == zoneId);
 
       setState(() {
         _zoneId = zoneId;
-        _allZones = countryWithZones.zones;
+        _allZones = zones;
         _selectedCity = resolvedZone.cityName;
         _categories = services;
         _selectedCategoryId = services.isNotEmpty ? services.first.id : null;
