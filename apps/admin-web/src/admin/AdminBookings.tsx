@@ -145,7 +145,11 @@ export default function AdminBookings({
                     </td>
                     <td>{b.payment ? `${b.payment.provider} — ${b.payment.status}` : '—'}</td>
                     <td>
-                      {(b.finalTotal ?? b.estimatedTotal).toFixed(0)} {b.currency}
+                      {/* estimatedTotal/finalTotal sont des Decimal Prisma, donc des
+                          chaînes en JSON (pas des nombres) -- Number(...) est requis
+                          avant .toFixed(), sinon TypeError et page blanche (aucun
+                          error boundary ne rattrape un crash de rendu ici). */}
+                      {Number(b.finalTotal ?? b.estimatedTotal).toFixed(0)} {b.currency}
                     </td>
                     <td>
                       <button className="secondary" onClick={() => setSelectedId(b.id)}>
@@ -205,19 +209,19 @@ export default function AdminBookings({
                   <li>
                     <span>{t('admin.bookingsDetailAmount')}</span>
                     <strong>
-                      {detail.payment.amount} {detail.currency}
+                      {Number(detail.payment.amount).toFixed(0)} {detail.currency}
                     </strong>
                   </li>
                   <li>
                     <span>{t('admin.bookingsDetailCommission')}</span>
                     <strong>
-                      {detail.payment.platformCommission} {detail.currency}
+                      {Number(detail.payment.platformCommission).toFixed(0)} {detail.currency}
                     </strong>
                   </li>
                   <li>
                     <span>{t('admin.bookingsDetailPayout')}</span>
                     <strong>
-                      {detail.payment.partnerPayout} {detail.currency}
+                      {Number(detail.payment.partnerPayout).toFixed(0)} {detail.currency}
                     </strong>
                   </li>
                 </ul>
@@ -232,7 +236,7 @@ export default function AdminBookings({
                     {detail.priceRevisions.map((r) => (
                       <li key={r.id}>
                         <span>
-                          {r.previousTotal} → {r.newTotal} ({r.reason})
+                          {Number(r.previousTotal).toFixed(0)} → {Number(r.newTotal).toFixed(0)} ({r.reason})
                         </span>
                         <strong>{r.confirmedByClientAt ? t('admin.bookingsRevisionConfirmed') : t('admin.bookingsRevisionPending')}</strong>
                       </li>

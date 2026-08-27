@@ -104,8 +104,13 @@ export interface Address {
 export interface Booking {
   id: string;
   status: BookingStatus;
-  estimatedTotal: number;
-  finalTotal?: number | null;
+  // Champs Decimal côté Prisma -- sérialisés en chaîne par JSON.stringify
+  // (Decimal.js), jamais en nombre. Toujours passer par Number(...) avant
+  // tout calcul ou .toFixed() -- voir AdminBookings.tsx pour le bug que ça
+  // a causé (page blanche : TypeError, .toFixed n'existe pas sur une
+  // chaîne).
+  estimatedTotal: string;
+  finalTotal?: string | null;
   currency: string;
   scheduledAt: string;
   missionPin?: string | null;
@@ -168,15 +173,16 @@ export interface AdminClient {
 export interface AdminBookingListItem {
   id: string;
   status: BookingStatus;
-  estimatedTotal: number;
-  finalTotal?: number | null;
+  // Decimal Prisma -- voir Booking.estimatedTotal ci-dessus.
+  estimatedTotal: string;
+  finalTotal?: string | null;
   currency: string;
   scheduledAt: string;
   createdAt: string;
   paymentProviderCode: string;
   client: { firstName: string; lastName: string; phone: string };
   assignedPartner?: { user: { firstName: string; lastName: string; phone: string } } | null;
-  payment?: { status: string; provider: string; amount: number; platformCommission: number; partnerPayout: number } | null;
+  payment?: { status: string; provider: string; amount: string; platformCommission: string; partnerPayout: string } | null;
   zone: { cityName: string; name: string };
   serviceCategory: { name: string; code: string };
 }
@@ -192,7 +198,8 @@ export interface AdminBookingDetail extends AdminBookingListItem {
   cancellationReason?: string | null;
   address: { landmark: string; district?: string | null };
   client: { firstName: string; lastName: string; phone: string; email?: string | null };
-  priceRevisions: { id: string; previousTotal: number; newTotal: number; reason: string; confirmedByClientAt?: string | null; createdAt: string }[];
+  // previousTotal/newTotal : Decimal Prisma -- voir Booking.estimatedTotal.
+  priceRevisions: { id: string; previousTotal: string; newTotal: string; reason: string; confirmedByClientAt?: string | null; createdAt: string }[];
   offers: { id: string; status: string; sentAt: string; respondedAt?: string | null; partnerProfile: { user: { firstName: string; lastName: string } } }[];
   incidents: { id: string; type: string; severity: string; status: string; description: string }[];
   rating?: { score: number; comment?: string | null } | null;
@@ -291,7 +298,8 @@ export interface PartnerOffer {
   booking: {
     id: string;
     status: BookingStatus;
-    estimatedTotal: number;
+    // Decimal Prisma -- voir Booking.estimatedTotal.
+    estimatedTotal: string;
     currency: string;
     scheduledAt: string;
     address?: { landmark: string };

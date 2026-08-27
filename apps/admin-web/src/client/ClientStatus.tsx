@@ -95,7 +95,7 @@ export default function ClientStatus({
       </p>
       <p className="muted">
         {t('client.estimatedTotal', {
-          total: booking.finalTotal ?? booking.estimatedTotal,
+          total: Number(booking.finalTotal ?? booking.estimatedTotal).toFixed(0),
           currency: booking.currency,
         })}
       </p>

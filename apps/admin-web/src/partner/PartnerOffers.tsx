@@ -83,7 +83,7 @@ export default function PartnerOffers({
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span>
                   {o.booking.address?.landmark ?? t('partner.addressFallback')} —{' '}
-                  {t(`bookingStatus.${o.booking.status}`)} — {o.booking.estimatedTotal}{' '}
+                  {t(`bookingStatus.${o.booking.status}`)} — {Number(o.booking.estimatedTotal).toFixed(0)}{' '}
                   {o.booking.currency}
                 </span>
                 <div className="row">
