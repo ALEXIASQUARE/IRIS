@@ -11,6 +11,7 @@ import '../../countries/countries_repository.dart';
 import '../../models/address.dart';
 import '../../models/catalog.dart';
 import '../../models/quote_result.dart';
+import '../../models/zone.dart';
 import '../../pricing/pricing_repository.dart';
 
 class _CartItem {
@@ -56,6 +57,17 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   String? _error;
 
   String? _zoneId;
+  // Toutes les zones du pays résolu, pour le sélecteur ville/quartier ci-
+  // dessous — voir _load(). Corrige un bug réel : sans sélecteur explicite,
+  // _zoneId retombait silencieusement sur la première zone du pays pour
+  // TOUTE réservation dont le client n'avait pas encore défini de zone par
+  // défaut (voir ClientProfileScreen), ce qui envoyait les réservations
+  // dans une ville au hasard — les partenaires de la vraie ville du client
+  // ne recevaient donc jamais l'offre (retour terrain : "certains
+  // partenaires ne voient pas les réservations pourtant ils sont dans la
+  // même ville").
+  List<Zone> _allZones = [];
+  String? _selectedCity;
   List<ServiceCategory> _categories = [];
   String? _selectedCategoryId;
   List<GarmentType> _garmentTypes = [];
@@ -158,8 +170,12 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         _addresses.list(),
       ]);
 
+      final resolvedZone = countryWithZones.zones.firstWhere((z) => z.id == zoneId);
+
       setState(() {
         _zoneId = zoneId;
+        _allZones = countryWithZones.zones;
+        _selectedCity = resolvedZone.cityName;
         _categories = services;
         _selectedCategoryId = services.isNotEmpty ? services.first.id : null;
         _garmentTypes = results[0] as List<GarmentType>;
@@ -171,6 +187,13 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         _selectedOption = _selectedCategory?.options.isNotEmpty == true ? _selectedCategory!.options.first : null;
         if (_savedAddresses.isNotEmpty) {
           _selectedAddressId = _savedAddresses.first.id;
+          // Aligne la zone de tarification sur la vraie zone de l'adresse
+          // par défaut plutôt que sur la zone du profil, qui peut différer.
+          final matches = _allZones.where((z) => z.id == _savedAddresses.first.zoneId);
+          if (matches.isNotEmpty) {
+            _zoneId = matches.first.id;
+            _selectedCity = matches.first.cityName;
+          }
         } else {
           _showNewAddress = true;
         }
@@ -180,6 +203,46 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  List<String> get _cities => _allZones.map((z) => z.cityName).toSet().toList()..sort();
+
+  List<Zone> get _zonesForSelectedCity =>
+      _allZones.where((z) => z.cityName == _selectedCity).toList()..sort((a, b) => a.name.compareTo(b.name));
+
+  void _onCityChanged(String? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedCity = value;
+      final zonesForCity = _allZones.where((z) => z.cityName == value).toList();
+      _zoneId = zonesForCity.isNotEmpty ? zonesForCity.first.id : null;
+      _quote = null;
+    });
+  }
+
+  void _onZoneChanged(String? value) {
+    if (value == null) return;
+    setState(() {
+      _zoneId = value;
+      _quote = null;
+    });
+  }
+
+  // La zone de tarification/réservation doit refléter l'adresse réellement
+  // utilisée — sinon le devis (et la ville enregistrée sur la réservation)
+  // ne correspond plus à l'adresse enregistrée choisie ci-dessous.
+  void _onSavedAddressChanged(String? addressId) {
+    if (addressId == null) return;
+    final address = _savedAddresses.firstWhere((a) => a.id == addressId);
+    final matches = _allZones.where((z) => z.id == address.zoneId);
+    setState(() {
+      _selectedAddressId = addressId;
+      _quote = null;
+      if (matches.isNotEmpty) {
+        _zoneId = matches.first.id;
+        _selectedCity = matches.first.cityName;
+      }
+    });
   }
 
   void _onCategoryChanged(String? id) {
@@ -371,6 +434,30 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text('Ville et quartier de la prestation', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _selectedCity,
+                  decoration: const InputDecoration(labelText: 'Ville'),
+                  items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: _onCityChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _zoneId,
+                  decoration: const InputDecoration(labelText: 'Quartier'),
+                  items: _zonesForSelectedCity.map((z) => DropdownMenuItem(value: z.id, child: Text(z.name))).toList(),
+                  onChanged: _onZoneChanged,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           Text('1. Choisir un service', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (_categories.isEmpty)
@@ -537,7 +624,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                 items: _savedAddresses
                     .map((a) => DropdownMenuItem(value: a.id, child: Text(a.landmark)))
                     .toList(),
-                onChanged: (v) => setState(() => _selectedAddressId = v),
+                onChanged: _onSavedAddressChanged,
               ),
               TextButton(
                 onPressed: () => setState(() => _showNewAddress = true),

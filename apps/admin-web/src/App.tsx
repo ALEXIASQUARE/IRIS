@@ -6,6 +6,7 @@ import PartnerSpace from './partner/PartnerSpace';
 import AdminSpace from './admin/AdminSpace';
 import { I18nProvider, useTranslation } from './i18n/I18nContext';
 import { LANGUAGES } from './i18n/translations';
+import { districtLabel } from './zoneLabel';
 
 function AppInner() {
   const { t, lang, setLang } = useTranslation();
@@ -75,6 +76,22 @@ function AppInner() {
   const country = countries.find((c) => c.id === countryId) ?? null;
   const zone = zones.find((z) => z.id === zoneId) ?? null;
 
+  // Ville/quartier de test — sans sélecteur explicite, cette zone retombait
+  // silencieusement sur la première zone du pays (zones[0]) pour toute
+  // réservation créée dans l'espace client, quelle que soit la ville
+  // réellement visée par le testeur. C'est ce qui envoyait les réservations
+  // dans une ville au hasard (ex: "Ebolowa") : les partenaires de la vraie
+  // ville ne recevaient donc jamais l'offre (retour terrain : "certains
+  // partenaires ne voient pas les réservations pourtant ils sont dans la
+  // même ville"). Même correctif que NewBookingScreen côté mobile.
+  const cities = [...new Set(zones.map((z) => z.cityName))];
+  const zonesInCity = zones.filter((z) => z.cityName === (zone?.cityName ?? cities[0]));
+
+  function handleCityChange(cityName: string) {
+    const firstZoneInCity = zones.find((z) => z.cityName === cityName);
+    if (firstZoneInCity) setZoneId(firstZoneInCity.id);
+  }
+
   return (
     <>
       <h1>{t('common.appTitle')}</h1>
@@ -97,6 +114,30 @@ function AppInner() {
                 ))}
               </select>
             </div>
+          )}
+          {zones.length > 0 && (
+            <>
+              <div className="field">
+                <label>{t('auth.cityLabel')}</label>
+                <select value={zone?.cityName ?? ''} onChange={(e) => handleCityChange(e.target.value)}>
+                  {cities.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>{t('auth.districtLabel')}</label>
+                <select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+                  {zonesInCity.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {districtLabel(z)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
           <div className="field">
             <label>{t('common.languageLabel')}</label>
