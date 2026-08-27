@@ -5,12 +5,17 @@ import '../../api/api_exception.dart';
 import '../../auth/auth_repository.dart';
 import '../../client/client_repository.dart';
 import '../../countries/countries_repository.dart';
+import '../../models/country.dart';
 import '../../models/zone.dart';
 
 // Pendant de PartnerProfileScreen côté client : le client n'avait aucun
-// moyen d'indiquer ni de corriger sa ville/son quartier par défaut (utilisé
-// pour préremplir la tarification et les nouvelles adresses — voir
-// NewBookingScreen), ni de changer son mot de passe.
+// moyen d'indiquer ni de corriger son pays/sa ville/son quartier par défaut
+// (utilisé pour préremplir la tarification et les nouvelles adresses — voir
+// NewBookingScreen), ni de changer son mot de passe. Le sélecteur Pays a été
+// ajouté après coup : sans lui, la ville/le quartier n'étaient
+// choisissables que dans le seul pays "prêt" (celui avec un catalogue de
+// services actif, toujours le Cameroun) — un client réellement basé
+// ailleurs ne pouvait pas indiquer sa vraie zone.
 //
 // Contrairement au partenaire, aucun état à faire remonter à l'écran
 // parent : NewBookingScreen recharge son propre zoneId par défaut
@@ -26,14 +31,20 @@ class ClientProfileScreen extends StatefulWidget {
 
 class _ClientProfileScreenState extends State<ClientProfileScreen> {
   late final ClientRepository _client;
-  late final CountriesRepository _countries;
+  late final CountriesRepository _countriesRepo;
   late final AuthRepository _auth;
 
-  bool _loadingZones = true;
+  bool _loadingCountries = true;
+  String? _countriesError;
+  List<Country> _countries = [];
+  String? _selectedCountryId;
+
+  bool _loadingZones = false;
   String? _zonesError;
   List<Zone> _zones = [];
   String? _selectedCity;
   String? _selectedZoneId;
+
   bool _savingZone = false;
   String? _zoneSaveMessage;
 
@@ -49,9 +60,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     super.initState();
     final apiClient = context.read<ApiClient>();
     _client = ClientRepository(apiClient);
-    _countries = CountriesRepository(apiClient);
+    _countriesRepo = CountriesRepository(apiClient);
     _auth = AuthRepository(apiClient);
-    _loadZones();
+    _loadInitial();
   }
 
   @override
@@ -62,36 +73,63 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _loadZones() async {
+  Future<void> _loadInitial() async {
+    setState(() {
+      _loadingCountries = true;
+      _countriesError = null;
+    });
+    try {
+      final countries = await _countriesRepo.listCountries();
+      setState(() => _countries = countries);
+
+      // Résout la zone déjà enregistrée directement par son id (pas via le
+      // pays "prêt" — voir PartnerProfileScreen pour le même correctif) pour
+      // retrouver son pays et présélectionner les trois niveaux d'un coup.
+      final profile = await _client.getProfile();
+      final homeZoneId = profile.homeZoneId;
+      if (homeZoneId != null) {
+        final zone = await _countriesRepo.getZone(homeZoneId);
+        if (zone.countryId != null) {
+          setState(() => _selectedCountryId = zone.countryId);
+          await _loadZones(zone.countryId!, preselect: zone);
+        }
+      }
+    } catch (e) {
+      setState(() => _countriesError = e is ApiException ? e.message : e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingCountries = false);
+    }
+  }
+
+  Future<void> _loadZones(String countryId, {Zone? preselect}) async {
     setState(() {
       _loadingZones = true;
       _zonesError = null;
     });
     try {
-      final countryWithZones = await _countries.findFirstCountryWithZones();
-      final profile = await _client.getProfile();
-      // Si aucune ville par défaut n'est encore enregistrée, ne
-      // présélectionne RIEN plutôt que de retomber sur la première zone du
-      // pays (simple artefact du tri alphabétique par nom de quartier côté
-      // backend, pas une vraie ville par défaut) — voir PartnerProfileScreen
-      // pour le même correctif côté partenaire.
-      Zone? selected;
-      for (final z in countryWithZones.zones) {
-        if (z.id == profile.homeZoneId) {
-          selected = z;
-          break;
-        }
-      }
+      final zones = await _countriesRepo.listZones(countryId);
       setState(() {
-        _zones = countryWithZones.zones;
-        _selectedCity = selected?.cityName;
-        _selectedZoneId = selected?.id;
+        _zones = zones;
+        _selectedCity = preselect?.cityName;
+        _selectedZoneId = preselect?.id;
       });
     } catch (e) {
       setState(() => _zonesError = e is ApiException ? e.message : e.toString());
     } finally {
       if (mounted) setState(() => _loadingZones = false);
     }
+  }
+
+  void _onCountryChanged(String? countryId) {
+    if (countryId == null) return;
+    setState(() {
+      _selectedCountryId = countryId;
+      _zones = [];
+      _selectedCity = null;
+      _selectedZoneId = null;
+      _zoneSaveMessage = null;
+    });
+    _loadZones(countryId);
   }
 
   List<String> get _cities => _zones.map((z) => z.cityName).toSet().toList()..sort();
@@ -108,7 +146,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     });
     try {
       await _client.updateHomeZone(_selectedZoneId!);
-      setState(() => _zoneSaveMessage = 'Ville et quartier mis à jour.');
+      setState(() => _zoneSaveMessage = 'Pays, ville et quartier mis à jour.');
     } on ApiException catch (e) {
       setState(() => _zonesError = e.message);
     } finally {
@@ -154,38 +192,61 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Ville et quartier', style: Theme.of(context).textTheme.titleMedium),
+            Text('Pays, ville et quartier', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            if (_loadingZones)
+            if (_loadingCountries)
               const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-            else if (_zonesError != null) ...[
-              Text(_zonesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            else if (_countriesError != null) ...[
+              Text(_countriesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
               const SizedBox(height: 8),
-              OutlinedButton(onPressed: _loadZones, child: const Text('Réessayer')),
+              OutlinedButton(onPressed: _loadInitial, child: const Text('Réessayer')),
             ] else ...[
               DropdownButtonFormField<String>(
-                initialValue: _selectedCity,
-                decoration: const InputDecoration(labelText: 'Ville'),
-                items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _selectedCity = value;
-                    final zonesForCity = _zones.where((z) => z.cityName == value).toList();
-                    _selectedZoneId = zonesForCity.isNotEmpty ? zonesForCity.first.id : null;
-                  });
-                },
+                initialValue: _selectedCountryId,
+                decoration: const InputDecoration(labelText: 'Pays'),
+                items: _countries.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                onChanged: _onCountryChanged,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedZoneId,
-                decoration: const InputDecoration(labelText: 'Quartier'),
-                items: _zonesForSelectedCity.map((z) => DropdownMenuItem(value: z.id, child: Text(z.name))).toList(),
-                onChanged: (value) => setState(() => _selectedZoneId = value),
-              ),
+              if (_loadingZones)
+                const LinearProgressIndicator()
+              else if (_zonesError != null) ...[
+                Text(_zonesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => _selectedCountryId == null ? null : _loadZones(_selectedCountryId!),
+                  child: const Text('Réessayer'),
+                ),
+              ] else if (_selectedCountryId != null && _zones.isEmpty) ...[
+                Text(
+                  'Aucune zone configurée pour ce pays pour le moment.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ] else if (_selectedCountryId != null) ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedCity,
+                  decoration: const InputDecoration(labelText: 'Ville'),
+                  items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedCity = value;
+                      final zonesForCity = _zones.where((z) => z.cityName == value).toList();
+                      _selectedZoneId = zonesForCity.isNotEmpty ? zonesForCity.first.id : null;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedZoneId,
+                  decoration: const InputDecoration(labelText: 'Quartier'),
+                  items: _zonesForSelectedCity.map((z) => DropdownMenuItem(value: z.id, child: Text(z.name))).toList(),
+                  onChanged: (value) => setState(() => _selectedZoneId = value),
+                ),
+              ],
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: _savingZone ? null : _saveZone,
+                onPressed: (_savingZone || _selectedZoneId == null) ? null : _saveZone,
                 child: _savingZone
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Enregistrer'),
