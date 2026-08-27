@@ -66,14 +66,23 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
     });
     try {
       final countryWithZones = await _countries.findFirstCountryWithZones();
-      final selected = countryWithZones.zones.firstWhere(
-        (z) => z.id == widget.currentZoneId,
-        orElse: () => countryWithZones.zones.first,
-      );
+      // Si la zone actuelle du partenaire est inconnue ou introuvable, ne
+      // présélectionne RIEN plutôt que de retomber sur la première zone du
+      // pays ("Abang" pour le Cameroun, simple artefact du tri alphabétique
+      // par nom de quartier côté backend) : mieux vaut forcer un choix
+      // explicite qu'enregistrer silencieusement une mauvaise ville si le
+      // partenaire tape "Enregistrer" sans y prêter attention.
+      Zone? selected;
+      for (final z in countryWithZones.zones) {
+        if (z.id == widget.currentZoneId) {
+          selected = z;
+          break;
+        }
+      }
       setState(() {
         _zones = countryWithZones.zones;
-        _selectedCity = selected.cityName;
-        _selectedZoneId = selected.id;
+        _selectedCity = selected?.cityName;
+        _selectedZoneId = selected?.id;
       });
     } catch (e) {
       setState(() => _zonesError = e is ApiException ? e.message : e.toString());

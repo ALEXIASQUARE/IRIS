@@ -98,13 +98,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     try {
       final zones = await _countriesRepo.listZones(country.id);
-      setState(() {
-        _zones = zones;
-        if (zones.isNotEmpty) {
-          _selectedCity = zones.first.cityName;
-          _selectedZoneId = zones.first.id;
-        }
-      });
+      // Ne JAMAIS présélectionner une ville/un quartier : la liste est triée
+      // alphabétiquement par nom de quartier (toutes villes confondues) côté
+      // backend, pas groupée par ville — "Abang" (Ebolowa) se trouve être en
+      // tête de liste pour le Cameroun. Une présélection revenait à inscrire
+      // silencieusement le partenaire à Ebolowa dès qu'il ne remarquait pas
+      // qu'il fallait changer les deux menus (retour terrain : "dès qu'un
+      // partenaire se connecte, il apparaît automatiquement la zone Abang").
+      setState(() => _zones = zones);
     } catch (e) {
       setState(() => _zonesError = e is ApiException ? e.message : e.toString());
     } finally {

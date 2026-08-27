@@ -70,14 +70,22 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     try {
       final countryWithZones = await _countries.findFirstCountryWithZones();
       final profile = await _client.getProfile();
-      final selected = countryWithZones.zones.firstWhere(
-        (z) => z.id == profile.homeZoneId,
-        orElse: () => countryWithZones.zones.first,
-      );
+      // Si aucune ville par défaut n'est encore enregistrée, ne
+      // présélectionne RIEN plutôt que de retomber sur la première zone du
+      // pays (simple artefact du tri alphabétique par nom de quartier côté
+      // backend, pas une vraie ville par défaut) — voir PartnerProfileScreen
+      // pour le même correctif côté partenaire.
+      Zone? selected;
+      for (final z in countryWithZones.zones) {
+        if (z.id == profile.homeZoneId) {
+          selected = z;
+          break;
+        }
+      }
       setState(() {
         _zones = countryWithZones.zones;
-        _selectedCity = selected.cityName;
-        _selectedZoneId = selected.id;
+        _selectedCity = selected?.cityName;
+        _selectedZoneId = selected?.id;
       });
     } catch (e) {
       setState(() => _zonesError = e is ApiException ? e.message : e.toString());
