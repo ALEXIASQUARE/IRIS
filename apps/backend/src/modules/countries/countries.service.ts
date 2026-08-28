@@ -32,10 +32,20 @@ export class CountriesService {
   async getZone(zoneId: string) {
     const zone = await this.prisma.zone.findUnique({
       where: { id: zoneId },
-      select: { id: true, name: true, cityName: true, centerLat: true, centerLng: true, countryId: true, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        cityName: true,
+        centerLat: true,
+        centerLng: true,
+        countryId: true,
+        isActive: true,
+        country: { select: { name: true } },
+      },
     });
     if (!zone) throw new NotFoundException('Zone introuvable.');
-    return zone;
+    const { country, ...rest } = zone;
+    return { ...rest, countryName: country?.name ?? null };
   }
 
   // ── Gestion admin pays/zones ─────────────────────────────────────────

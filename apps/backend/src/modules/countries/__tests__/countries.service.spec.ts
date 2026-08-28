@@ -12,7 +12,16 @@ import { CountriesService } from '../countries.service';
 describe('CountriesService — getZone', () => {
   it('renvoie la zone quel que soit son pays', async () => {
     const prisma = {
-      zone: { findUnique: jest.fn().mockResolvedValue({ id: 'zone-be', countryId: 'country-be', name: 'Centre', cityName: 'Libramont-Chevigny', isActive: true }) },
+      zone: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'zone-be',
+          countryId: 'country-be',
+          name: 'Centre',
+          cityName: 'Libramont-Chevigny',
+          isActive: true,
+          country: { name: 'Belgique' },
+        }),
+      },
     };
     const service = new CountriesService(prisma as any);
 
@@ -22,7 +31,7 @@ describe('CountriesService — getZone', () => {
       expect.objectContaining({ where: { id: 'zone-be' } }),
     );
     expect(result).toEqual(
-      expect.objectContaining({ cityName: 'Libramont-Chevigny', name: 'Centre' }),
+      expect.objectContaining({ cityName: 'Libramont-Chevigny', name: 'Centre', countryName: 'Belgique' }),
     );
   });
 
