@@ -67,11 +67,13 @@ export class AdminController {
   @Get('bookings')
   listBookings(
     @Query('status') status?: BookingStatus,
+    @Query('clientId') clientId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
     return this.admin.listBookings({
       status,
+      clientId,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });

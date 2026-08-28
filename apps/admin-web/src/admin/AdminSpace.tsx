@@ -27,6 +27,11 @@ export default function AdminSpace({ country }: { country: Country }) {
   // visite précédente au tableau de bord.
   const [pendingBookingStatus, setPendingBookingStatus] = useState<BookingStatus | undefined>();
   const [pendingPartnerStatus, setPendingPartnerStatus] = useState<PartnerStatus | undefined>();
+  // Filtre par client posé depuis la liste Clients ("voir toutes les
+  // réservations d'un client en cliquant sur lui") — distinct du filtre de
+  // statut : les deux peuvent être actifs en même temps (ex: "réservations
+  // en recherche de partenaire" pour CE client précis).
+  const [pendingClientFilter, setPendingClientFilter] = useState<{ id: string; label: string } | undefined>();
 
   function navigateToBookings(status?: BookingStatus) {
     setPendingBookingStatus(status);
@@ -40,6 +45,12 @@ export default function AdminSpace({ country }: { country: Country }) {
 
   function navigateToClients() {
     setTab('clients');
+  }
+
+  function navigateToClientBookings(id: string, label: string) {
+    setPendingClientFilter({ id, label });
+    setPendingBookingStatus(undefined);
+    setTab('bookings');
   }
 
   function handleAuth(newToken: string) {
@@ -82,6 +93,7 @@ export default function AdminSpace({ country }: { country: Country }) {
             // dont le statut a changé depuis (ex: une réservation acceptée
             // entre-temps, désormais PARTNER_ASSIGNED).
             setPendingBookingStatus(undefined);
+            setPendingClientFilter(undefined);
             setTab('bookings');
           }}
         >
@@ -128,12 +140,18 @@ export default function AdminSpace({ country }: { country: Country }) {
           réinitialisait pas le filtre affiché malgré la réinitialisation
           de pendingBookingStatus ci-dessus. */}
       {tab === 'bookings' && (
-        <AdminBookings key={pendingBookingStatus ?? 'all'} token={token} initialStatusFilter={pendingBookingStatus} />
+        <AdminBookings
+          key={`${pendingBookingStatus ?? 'all'}-${pendingClientFilter?.id ?? 'all'}`}
+          token={token}
+          initialStatusFilter={pendingBookingStatus}
+          clientFilter={pendingClientFilter}
+          onClearClientFilter={() => setPendingClientFilter(undefined)}
+        />
       )}
       {tab === 'partners' && (
         <AdminPartners key={pendingPartnerStatus ?? 'all'} token={token} initialStatusFilter={pendingPartnerStatus} />
       )}
-      {tab === 'clients' && <AdminClients token={token} />}
+      {tab === 'clients' && <AdminClients token={token} onViewBookings={navigateToClientBookings} />}
       {tab === 'incidents' && <AdminIncidents token={token} />}
       {tab === 'audit' && <AdminAuditLog token={token} />}
       {tab === 'catalog' && <AdminCatalog token={token} />}

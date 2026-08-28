@@ -7,7 +7,13 @@ import { useTranslation } from '../i18n/I18nContext';
 // défaut (si renseignée — voir ClientProfileScreen), nombre de réservations,
 // et blocage/déblocage (User.isBlocked, déjà vérifié à la connexion côté
 // AuthService.login).
-export default function AdminClients({ token }: { token: string }) {
+export default function AdminClients({
+  token,
+  onViewBookings,
+}: {
+  token: string;
+  onViewBookings: (clientId: string, label: string) => void;
+}) {
   const { t } = useTranslation();
   const [clients, setClients] = useState<AdminClient[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -64,34 +70,55 @@ export default function AdminClients({ token }: { token: string }) {
         <p className="muted">{t('admin.noClients')}</p>
       ) : (
         <ul className="item-list">
-          {clients.map((c) => (
-            <li key={c.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span>
-                  {c.firstName} {c.lastName} ({c.phone})
-                  {c.isBlocked && <strong> — {t('admin.clientBlocked')}</strong>}
-                  <div className="muted">
-                    {c.homeZone ? `${c.homeZone.cityName} - ${c.homeZone.name}` : t('admin.clientNoZone')}
-                    {' · '}
-                    {t('admin.clientBookingsCount', { count: c._count.bookingsAsClient })}
-                    {' · '}
-                    {t('admin.clientJoinedOn', { date: new Date(c.createdAt).toLocaleDateString() })}
+          {clients.map((c) => {
+            const label = `${c.firstName} ${c.lastName}`;
+            return (
+              <li
+                key={c.id}
+                className="clickable"
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}
+                onClick={() => onViewBookings(c.id, label)}
+              >
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <span>
+                    {label} ({c.phone})
+                    {c.isBlocked && <strong> — {t('admin.clientBlocked')}</strong>}
+                    <div className="muted">
+                      {c.homeZone ? `${c.homeZone.cityName} - ${c.homeZone.name}` : t('admin.clientNoZone')}
+                      {' · '}
+                      {t('admin.clientBookingsCount', { count: c._count.bookingsAsClient })}
+                      {' · '}
+                      {t('admin.clientJoinedOn', { date: new Date(c.createdAt).toLocaleDateString() })}
+                    </div>
+                  </span>
+                  <div className="row">
+                    {c.isBlocked ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unblock(c.id);
+                        }}
+                        disabled={busyId === c.id}
+                      >
+                        {t('admin.unblock')}
+                      </button>
+                    ) : (
+                      <button
+                        className="danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          block(c.id);
+                        }}
+                        disabled={busyId === c.id}
+                      >
+                        {t('admin.block')}
+                      </button>
+                    )}
                   </div>
-                </span>
-                <div className="row">
-                  {c.isBlocked ? (
-                    <button onClick={() => unblock(c.id)} disabled={busyId === c.id}>
-                      {t('admin.unblock')}
-                    </button>
-                  ) : (
-                    <button className="danger" onClick={() => block(c.id)} disabled={busyId === c.id}>
-                      {t('admin.block')}
-                    </button>
-                  )}
                 </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

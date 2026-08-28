@@ -142,11 +142,14 @@ export class AdminService {
   // (client comme partenaire), moyen/état de paiement — répond au besoin
   // "voir tous les états de toutes les réservations côté client et
   // partenaire" et "visualiser les transactions de bout en bout".
-  async listBookings(params: { status?: BookingStatus; page?: number; pageSize?: number }) {
+  async listBookings(params: { status?: BookingStatus; clientId?: string; page?: number; pageSize?: number }) {
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
 
-    const where = params.status ? { status: params.status } : undefined;
+    const where =
+      params.status || params.clientId
+        ? { ...(params.status ? { status: params.status } : {}), ...(params.clientId ? { clientId: params.clientId } : {}) }
+        : undefined;
 
     const [items, total] = await Promise.all([
       this.prisma.booking.findMany({

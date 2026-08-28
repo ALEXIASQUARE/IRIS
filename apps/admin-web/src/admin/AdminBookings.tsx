@@ -26,9 +26,17 @@ const ALL_STATUSES: BookingStatus[] = [
 export default function AdminBookings({
   token,
   initialStatusFilter,
+  clientFilter,
+  onClearClientFilter,
 }: {
   token: string;
   initialStatusFilter?: BookingStatus;
+  // Filtre par client (voir AdminClients — "voir toutes les réservations
+  // d'un client en cliquant sur lui"). Contrairement à initialStatusFilter,
+  // pas de sélecteur pour le changer depuis cet écran : on l'affiche comme
+  // un bandeau explicite avec un bouton pour le retirer.
+  clientFilter?: { id: string; label: string };
+  onClearClientFilter?: () => void;
 }) {
   const { t } = useTranslation();
   const [list, setList] = useState<AdminBookingList | null>(null);
@@ -44,6 +52,7 @@ export default function AdminBookings({
     try {
       const qs = new URLSearchParams({ page: String(page), pageSize: '25' });
       if (statusFilter) qs.set('status', statusFilter);
+      if (clientFilter) qs.set('clientId', clientFilter.id);
       const data = await apiRequest<AdminBookingList>('GET', `/admin/bookings?${qs.toString()}`, { token });
       setList(data);
     } catch (e) {
@@ -56,7 +65,7 @@ export default function AdminBookings({
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, statusFilter, page]);
+  }, [token, statusFilter, clientFilter?.id, page]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -83,6 +92,15 @@ export default function AdminBookings({
     <div className="card">
       <h2>{t('admin.bookingsTitle')}</h2>
       {error && <div className="error">{error}</div>}
+
+      {clientFilter && (
+        <div className="hint row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <span>{t('admin.bookingsFilteredByClient', { name: clientFilter.label })}</span>
+          <button className="secondary" onClick={onClearClientFilter}>
+            {t('admin.bookingsClearClientFilter')}
+          </button>
+        </div>
+      )}
 
       <div className="row" style={{ marginBottom: 12 }}>
         <div className="field">

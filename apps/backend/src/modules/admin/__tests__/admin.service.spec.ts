@@ -13,10 +13,51 @@ function buildDeps(overrides: Partial<Record<string, any>> = {}) {
       update: jest.fn().mockResolvedValue({ id: 'client-1', isBlocked: true }),
       ...overrides.user,
     },
+    booking: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      ...overrides.booking,
+    },
   };
   const audit = { log: jest.fn() };
   return { prisma, audit };
 }
+
+// Répond au retour utilisateur : "permet qu'on puisse voir toutes les
+// réservations d'un client en cliquant sur lui" (liste Clients, Testeur).
+describe('AdminService — listBookings (filtre par client)', () => {
+  it('filtre par clientId quand fourni', async () => {
+    const { prisma, audit } = buildDeps();
+    const service = new AdminService(prisma, audit as any);
+
+    await service.listBookings({ clientId: 'client-1' });
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { clientId: 'client-1' } }),
+    );
+    expect(prisma.booking.count).toHaveBeenCalledWith({ where: { clientId: 'client-1' } });
+  });
+
+  it('combine clientId et status quand les deux sont fournis', async () => {
+    const { prisma, audit } = buildDeps();
+    const service = new AdminService(prisma, audit as any);
+
+    await service.listBookings({ clientId: 'client-1', status: 'SEARCHING_PARTNER' as any });
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'SEARCHING_PARTNER', clientId: 'client-1' } }),
+    );
+  });
+
+  it('ne filtre pas quand ni clientId ni status ne sont fournis', async () => {
+    const { prisma, audit } = buildDeps();
+    const service = new AdminService(prisma, audit as any);
+
+    await service.listBookings({});
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: undefined }));
+  });
+});
 
 describe('AdminService — clients', () => {
   it('listClients ne remonte que les comptes CLIENT', async () => {
