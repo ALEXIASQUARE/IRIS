@@ -36,6 +36,8 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
   String? _error;
   String? _zoneId;
   String? _zoneName;
+  String? _cityName;
+  String? _countryName;
   String? _profileStatus;
   bool _available = false;
   bool _togglingAvailability = false;
@@ -104,6 +106,8 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
       setState(() {
         _zoneId = zone?.id;
         _zoneName = zone?.name;
+        _cityName = zone?.cityName;
+        _countryName = zone?.countryName;
         _profileStatus = profile!.status;
         _available = profile.isAvailable;
       });
@@ -170,6 +174,8 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                             setState(() {
                               _zoneId = zone.id;
                               _zoneName = zone.name;
+                              _cityName = zone.cityName;
+                              _countryName = zone.countryName;
                             });
                           },
                         ),
@@ -224,8 +230,24 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(
-                            'Zone : ${_zoneName ?? '—'} — ${_available ? 'Disponible' : 'Indisponible'}',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Pays : ${_countryName ?? '—'}'),
+                              Text('Ville : ${_cityName ?? '—'}'),
+                              Text('Quartier : ${_zoneName ?? '—'}'),
+                              const SizedBox(height: 4),
+                              Text(
+                                _available ? 'Disponible' : 'Indisponible',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _available
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         FilledButton(

@@ -144,7 +144,26 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
     try {
       await _partners.upsertProfile(currentZoneId: _selectedZoneId!);
       final zone = _zones.firstWhere((z) => z.id == _selectedZoneId);
-      widget.onZoneChanged(zone);
+      // listZones() ne renvoie pas le nom du pays (implicite dans l'URL) —
+      // on le complète depuis _countries avant de remonter la zone, sinon
+      // PartnerHomeScreen perd le nom du pays affiché juste après un
+      // changement de zone (jusqu'au prochain _init()).
+      Country? country;
+      for (final c in _countries) {
+        if (c.id == _selectedCountryId) {
+          country = c;
+          break;
+        }
+      }
+      widget.onZoneChanged(Zone(
+        id: zone.id,
+        name: zone.name,
+        cityName: zone.cityName,
+        centerLat: zone.centerLat,
+        centerLng: zone.centerLng,
+        countryId: zone.countryId ?? _selectedCountryId,
+        countryName: country?.name,
+      ));
       setState(() => _zoneSaveMessage = 'Pays, ville et quartier mis à jour.');
     } on ApiException catch (e) {
       setState(() => _zonesError = e.message);
