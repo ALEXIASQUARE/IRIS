@@ -71,10 +71,29 @@ export default function AdminSpace({ country }: { country: Country }) {
         <button className={`tab ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => setTab('dashboard')}>
           {t('admin.tabDashboard')}
         </button>
-        <button className={`tab ${tab === 'bookings' ? 'active' : ''}`} onClick={() => setTab('bookings')}>
+        <button
+          className={`tab ${tab === 'bookings' ? 'active' : ''}`}
+          onClick={() => {
+            // Un clic direct sur l'onglet (par opposition à un clic sur une
+            // ligne du tableau de bord) doit toujours montrer la liste
+            // complète -- sinon un filtre posé plus tôt depuis le tableau
+            // de bord (ex: "Recherche d'un partenaire en cours") reste
+            // actif indéfiniment et cache silencieusement des réservations
+            // dont le statut a changé depuis (ex: une réservation acceptée
+            // entre-temps, désormais PARTNER_ASSIGNED).
+            setPendingBookingStatus(undefined);
+            setTab('bookings');
+          }}
+        >
           {t('admin.tabBookings')}
         </button>
-        <button className={`tab ${tab === 'partners' ? 'active' : ''}`} onClick={() => setTab('partners')}>
+        <button
+          className={`tab ${tab === 'partners' ? 'active' : ''}`}
+          onClick={() => {
+            setPendingPartnerStatus(undefined);
+            setTab('partners');
+          }}
+        >
           {t('admin.tabPartners')}
         </button>
         <button className={`tab ${tab === 'clients' ? 'active' : ''}`} onClick={() => setTab('clients')}>
@@ -102,8 +121,18 @@ export default function AdminSpace({ country }: { country: Country }) {
           onNavigateClients={navigateToClients}
         />
       )}
-      {tab === 'bookings' && <AdminBookings token={token} initialStatusFilter={pendingBookingStatus} />}
-      {tab === 'partners' && <AdminPartners token={token} initialStatusFilter={pendingPartnerStatus} />}
+      {/* La clé force un remontage propre à chaque changement de filtre visé
+          (y compris vers "aucun filtre") : initialStatusFilter n'est lu
+          qu'une fois par AdminBookings/AdminPartners (useState), donc sans
+          ça, cliquer sur l'onglet alors qu'il est déjà actif ne
+          réinitialisait pas le filtre affiché malgré la réinitialisation
+          de pendingBookingStatus ci-dessus. */}
+      {tab === 'bookings' && (
+        <AdminBookings key={pendingBookingStatus ?? 'all'} token={token} initialStatusFilter={pendingBookingStatus} />
+      )}
+      {tab === 'partners' && (
+        <AdminPartners key={pendingPartnerStatus ?? 'all'} token={token} initialStatusFilter={pendingPartnerStatus} />
+      )}
       {tab === 'clients' && <AdminClients token={token} />}
       {tab === 'incidents' && <AdminIncidents token={token} />}
       {tab === 'audit' && <AdminAuditLog token={token} />}
