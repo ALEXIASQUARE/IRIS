@@ -173,6 +173,9 @@ export interface AdminClient {
 export interface AdminBookingListItem {
   id: string;
   status: BookingStatus;
+  // Téléphone de contact saisi à la réservation (peut différer du téléphone
+  // du compte client).
+  contactPhone?: string | null;
   // Decimal Prisma -- voir Booking.estimatedTotal ci-dessus.
   estimatedTotal: string;
   finalTotal?: string | null;

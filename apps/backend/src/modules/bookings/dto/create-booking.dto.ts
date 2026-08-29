@@ -26,6 +26,13 @@ export class CreateBookingDto {
   @IsBoolean()
   urgent?: boolean;
 
+  // Téléphone de contact pour cette réservation (par défaut celui du compte,
+  // rempli côté client). Facultatif : si absent, on retombe sur le
+  // téléphone du compte — voir BookingsService.create.
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
   // Présent uniquement pour le service laverie — Mode A (§21.7).
   @IsOptional()
   @IsArray()

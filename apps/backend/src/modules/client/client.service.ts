@@ -13,7 +13,7 @@ export class ClientService {
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { homeZoneId: true },
+      select: { homeZoneId: true, phone: true },
     });
     return user;
   }

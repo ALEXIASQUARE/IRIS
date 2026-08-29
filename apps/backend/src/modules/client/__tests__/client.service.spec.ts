@@ -7,7 +7,7 @@ import { ClientService } from '../client.service';
 function buildPrisma(overrides: Partial<Record<string, any>> = {}) {
   return {
     user: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ homeZoneId: 'zone-1' }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ homeZoneId: 'zone-1', phone: '+237600000001' }),
       update: jest.fn().mockResolvedValue({ homeZoneId: 'zone-2' }),
       ...overrides.user,
     },
@@ -27,9 +27,9 @@ describe('ClientService', () => {
 
     expect(prisma.user.findUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      select: { homeZoneId: true },
+      select: { homeZoneId: true, phone: true },
     });
-    expect(result).toEqual({ homeZoneId: 'zone-1' });
+    expect(result).toEqual({ homeZoneId: 'zone-1', phone: '+237600000001' });
   });
 
   it('updateHomeZone met à jour la zone quand elle est valide', async () => {

@@ -102,12 +102,14 @@ export interface Booking {
   currency: string
   scheduledAt: string
   missionPin?: string | null
+  contactPhone?: string | null
   priceRevisions?: PriceRevision[]
   address?: { landmark: string; latitude?: number; longitude?: number }
 }
 
 export interface ClientProfile {
   homeZoneId?: string | null
+  phone?: string | null
 }
 
 export interface NotificationItem {

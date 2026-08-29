@@ -33,6 +33,7 @@ export interface CreateBookingInput {
   scheduledAt: string // ISO
   paymentProviderCode: string
   urgent: boolean
+  contactPhone?: string
   laundryItems?: LaundryItemInput[]
   serviceOptionId?: string
   hours?: number

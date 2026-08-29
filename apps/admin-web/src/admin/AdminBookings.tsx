@@ -151,6 +151,9 @@ export default function AdminBookings({
                     <td>
                       {b.client.firstName} {b.client.lastName}
                       <div className="muted">{b.client.phone}</div>
+                      {b.contactPhone && b.contactPhone !== b.client.phone && (
+                        <div className="muted">Contact : {b.contactPhone}</div>
+                      )}
                     </td>
                     <td>
                       {b.assignedPartner

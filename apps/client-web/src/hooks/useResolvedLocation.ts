@@ -6,23 +6,31 @@ import type { Country, Zone } from '../types'
 export interface ResolvedLocation {
   loading: boolean
   error: string | null
+  /** Tous les pays actifs — pour le sélecteur du formulaire de réservation. */
+  allCountries: Country[]
+  /** Pays résolu au démarrage (profil du client, sinon premier pays prêt). */
   country: Country | null
+  /** Quartiers du pays résolu. */
   zones: Zone[]
   /** Quartier par défaut du client, s'il en a enregistré un. */
   homeZoneId: string | null
+  /** Téléphone du compte client (pré-remplit le champ contact). */
+  phone: string | null
   retry: () => void
 }
 
-// Résout le pays et la liste des quartiers pour le client courant :
+// Résout pays + quartiers + téléphone pour le client courant :
 //  - si le profil a un homeZoneId -> on part de ce quartier (et de son pays) ;
-//  - sinon -> repli sur le premier pays qui a des quartiers configurés.
-// Même logique que apps/mobile (NewBookingScreen._load / ClientProfileScreen).
+//  - sinon -> repli sur le premier pays qui a des quartiers ET un catalogue
+//    de services (même logique que apps/mobile).
 export function useResolvedLocation(): ResolvedLocation {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [allCountries, setAllCountries] = useState<Country[]>([])
   const [country, setCountry] = useState<Country | null>(null)
   const [zones, setZones] = useState<Zone[]>([])
   const [homeZoneId, setHomeZoneId] = useState<string | null>(null)
+  const [phone, setPhone] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
 
   const retry = useCallback(() => setNonce((n) => n + 1), [])
@@ -34,12 +42,14 @@ export function useResolvedLocation(): ResolvedLocation {
       setError(null)
       try {
         const countries = await listCountries()
+        if (!cancelled) setAllCountries(countries)
 
         let resolvedCountryId: string | null = null
         let resolvedHomeZoneId: string | null = null
 
         try {
           const profile = await getClientProfile()
+          if (!cancelled && profile.phone) setPhone(profile.phone)
           if (profile.homeZoneId) {
             const zone = await getZone(profile.homeZoneId)
             if (zone.countryId) {
@@ -58,11 +68,6 @@ export function useResolvedLocation(): ResolvedLocation {
           resolvedCountry = countries.find((c) => c.id === resolvedCountryId) ?? null
           zoneList = await listZones(resolvedCountryId)
         } else {
-          // Repli : premier pays qui a A LA FOIS des quartiers ET un
-          // catalogue de services actif. Sans le test des services, on
-          // tombe sur un pays de test (ex : Belgique -> quartiers mais
-          // aucun service) et la reservation reste bloquee -- meme
-          // correctif que findFirstCountryWithZones cote mobile.
           for (const c of countries) {
             const list = await listZones(c.id)
             if (list.length === 0) continue
@@ -92,5 +97,5 @@ export function useResolvedLocation(): ResolvedLocation {
     }
   }, [nonce])
 
-  return { loading, error, country, zones, homeZoneId, retry }
+  return { loading, error, allCountries, country, zones, homeZoneId, phone, retry }
 }

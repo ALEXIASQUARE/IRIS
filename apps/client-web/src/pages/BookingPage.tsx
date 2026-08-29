@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createAddress, listAddresses } from '../api/account'
 import {
@@ -7,18 +7,14 @@ import {
   listServices,
   listStainTypes,
   listWashMethods,
+  listZones,
 } from '../api/catalog'
-import {
-  createBooking,
-  genericQuote,
-  laundryQuote,
-  type LaundryItemInput,
-} from '../api/bookings'
+import { createBooking, genericQuote, laundryQuote, type LaundryItemInput } from '../api/bookings'
 import { ApiError } from '../api/client'
 import { InlineMessage } from '../components/InlineMessage'
 import { Spinner } from '../components/Spinner'
 import { useResolvedLocation } from '../hooks/useResolvedLocation'
-import type { Address, CodeName, GarmentType, QuoteResult, ServiceCategory } from '../types'
+import type { Address, CodeName, GarmentType, QuoteResult, ServiceCategory, Zone } from '../types'
 
 interface CartItem extends LaundryItemInput {
   garmentName: string
@@ -27,16 +23,29 @@ interface CartItem extends LaundryItemInput {
 function defaultScheduledAt() {
   const d = new Date(Date.now() + 60 * 60 * 1000)
   d.setSeconds(0, 0)
-  // datetime-local veut "YYYY-MM-DDTHH:mm" en heure locale
   const tzOffset = d.getTimezoneOffset() * 60000
   return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16)
+}
+
+function stripName({ garmentName, ...rest }: CartItem): LaundryItemInput {
+  void garmentName
+  return rest
 }
 
 export function BookingPage() {
   const navigate = useNavigate()
   const loc = useResolvedLocation()
 
+  // Pays de la prestation — sélectionnable (le quartier, le catalogue de
+  // services et les types d'articles en dépendent).
+  const [countryId, setCountryId] = useState('')
+  const [zones, setZones] = useState<Zone[]>([])
+  const [switchingCountry, setSwitchingCountry] = useState(false)
+
+  const [contactPhone, setContactPhone] = useState('')
+
   const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [categories, setCategories] = useState<ServiceCategory[]>([])
   const [garmentTypes, setGarmentTypes] = useState<GarmentType[]>([])
   const [fabrics, setFabrics] = useState<CodeName[]>([])
@@ -78,47 +87,62 @@ export function BookingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const cities = useMemo(
-    () => [...new Set(loc.zones.map((z) => z.cityName))].sort(),
-    [loc.zones],
-  )
+  const cities = useMemo(() => [...new Set(zones.map((z) => z.cityName))].sort(), [zones])
   const zonesForCity = useMemo(
-    () => loc.zones.filter((z) => z.cityName === selectedCity).sort((a, b) => a.name.localeCompare(b.name)),
-    [loc.zones, selectedCity],
+    () => zones.filter((z) => z.cityName === selectedCity).sort((a, b) => a.name.localeCompare(b.name)),
+    [zones, selectedCity],
   )
 
-  // Quand le pays / les zones sont résolus : présélectionne ville + quartier
-  // (à partir du quartier par défaut du client si disponible) puis charge le
-  // catalogue.
+  // Charge le catalogue (services / articles) du pays. Les références
+  // indépendantes du pays (tissus, lavages, salissures) et les adresses sont
+  // chargées à part pour qu'un échec de l'une ne vide pas les autres —
+  // notamment : un souci sur /addresses (authentifié) ne doit plus faire
+  // disparaître la liste des services (publique).
+  const loadCatalog = useCallback(async (cid: string) => {
+    setCatalogLoading(true)
+    setCatalogError(null)
+    try {
+      const [cats, gt, fc, wm, st] = await Promise.all([
+        listServices(cid),
+        listGarmentTypes(cid),
+        listFabricCategories(),
+        listWashMethods(),
+        listStainTypes(),
+      ])
+      setCategories(cats)
+      setCategoryId(cats[0]?.id ?? '')
+      setOptionId(cats[0]?.options[0]?.id ?? '')
+      setGarmentTypes(gt)
+      setGarmentTypeId(gt[0]?.id ?? '')
+      setFabrics(fc)
+      setWashMethods(wm)
+      setStains(st)
+      setCart([])
+      setQuote(null)
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
+
+  // Initialisation : dès que useResolvedLocation a résolu un pays.
   useEffect(() => {
-    if (loc.loading || !loc.country || loc.zones.length === 0) return
+    if (loc.loading || !loc.country || loc.zones.length === 0 || countryId) return
     const home = loc.homeZoneId ? loc.zones.find((z) => z.id === loc.homeZoneId) : undefined
     const seed = home ?? loc.zones[0]
+    setCountryId(loc.country.id)
+    setZones(loc.zones)
     setSelectedCity(seed.cityName)
     setZoneId(seed.id)
+    if (loc.phone && !contactPhone) setContactPhone(loc.phone)
 
     let cancelled = false
     ;(async () => {
+      await loadCatalog(loc.country!.id)
       try {
-        const [cats, gt, fc, wm, st, addr] = await Promise.all([
-          listServices(loc.country!.id),
-          listGarmentTypes(loc.country!.id),
-          listFabricCategories(),
-          listWashMethods(),
-          listStainTypes(),
-          listAddresses(),
-        ])
+        const addr = await listAddresses()
         if (cancelled) return
-        setCategories(cats)
-        if (cats[0]) {
-          setCategoryId(cats[0].id)
-          if (cats[0].options[0]) setOptionId(cats[0].options[0].id)
-        }
-        setGarmentTypes(gt)
-        if (gt[0]) setGarmentTypeId(gt[0].id)
-        setFabrics(fc)
-        setWashMethods(wm)
-        setStains(st)
         setAddresses(addr)
         if (addr[0]) {
           setSelectedAddressId(addr[0].id)
@@ -130,18 +154,44 @@ export function BookingPage() {
         } else {
           setShowNewAddress(true)
         }
-      } catch (e) {
-        if (!cancelled) setCatalogError(e instanceof Error ? e.message : String(e))
+      } catch {
+        // adresses indisponibles -> on propose la saisie d'une nouvelle adresse
+        if (!cancelled) setShowNewAddress(true)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [loc.loading, loc.country, loc.zones, loc.homeZoneId])
+  }, [loc.loading, loc.country, loc.zones, loc.homeZoneId, loc.phone, countryId, contactPhone, loadCatalog])
+
+  async function onCountryChange(newId: string) {
+    if (!newId || newId === countryId) return
+    setSwitchingCountry(true)
+    setError(null)
+    try {
+      const list = await listZones(newId)
+      setCountryId(newId)
+      setZones(list)
+      const seed = list[0]
+      setSelectedCity(seed?.cityName ?? '')
+      setZoneId(seed?.id ?? '')
+      await loadCatalog(newId)
+      // Une adresse enregistrée appartient au quartier d'un pays : si aucune
+      // ne correspond au nouveau pays, on bascule sur la saisie.
+      if (!addresses.some((a) => list.some((z) => z.id === a.zoneId))) {
+        setSelectedAddressId('')
+        setShowNewAddress(true)
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setSwitchingCountry(false)
+    }
+  }
 
   function onCityChange(city: string) {
     setSelectedCity(city)
-    const first = loc.zones.find((z) => z.cityName === city)
+    const first = zones.find((z) => z.cityName === city)
     setZoneId(first?.id ?? '')
     setQuote(null)
   }
@@ -181,10 +231,7 @@ export function BookingPage() {
     setError(null)
     setQuoting(true)
     try {
-      const items: LaundryItemInput[] = cart.map(({ garmentName, ...rest }) => {
-        void garmentName
-        return rest
-      })
+      const items = cart.map(stripName)
       const res = isLaundry
         ? await laundryQuote({ serviceCategoryId: categoryId, zoneId, items, urgent })
         : await genericQuote({
@@ -203,7 +250,7 @@ export function BookingPage() {
 
   function useMyPosition() {
     if (!navigator.geolocation) {
-      setError('La géolocalisation n\'est pas disponible sur cet appareil.')
+      setError("La géolocalisation n'est pas disponible sur cet appareil.")
       return
     }
     setLocating(true)
@@ -224,6 +271,10 @@ export function BookingPage() {
 
   async function confirm() {
     if (!zoneId || !categoryId) return
+    if (!contactPhone.trim()) {
+      setError('Indiquez un numéro de téléphone de contact.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
@@ -239,19 +290,15 @@ export function BookingPage() {
         addressId = created.id
       }
 
-      const items: LaundryItemInput[] = cart.map(({ garmentName, ...rest }) => {
-        void garmentName
-        return rest
-      })
-
       const booking = await createBooking({
         serviceCategoryId: categoryId,
         addressId,
         scheduledAt: new Date(scheduledAt).toISOString(),
         paymentProviderCode,
         urgent,
+        contactPhone: contactPhone.trim(),
         ...(isLaundry
-          ? { laundryItems: items }
+          ? { laundryItems: cart.map(stripName) }
           : {
               serviceOptionId: optionId,
               ...(selectedOption?.pricingUnit === 'HOURLY' ? { hours } : {}),
@@ -266,7 +313,7 @@ export function BookingPage() {
   }
 
   if (loc.loading) return <Spinner center />
-  if (loc.error) {
+  if (loc.error && !loc.country) {
     return (
       <div className="card">
         <InlineMessage kind="error">{loc.error}</InlineMessage>
@@ -277,7 +324,7 @@ export function BookingPage() {
     )
   }
 
-  const currency = loc.country?.currency ?? ''
+  const currency = loc.allCountries.find((c) => c.id === countryId)?.currency ?? ''
   const quoteReady = isLaundry ? cart.length > 0 : Boolean(optionId)
 
   return (
@@ -285,41 +332,15 @@ export function BookingPage() {
       <h2 style={{ marginTop: 0 }}>Nouvelle réservation</h2>
       {(error || catalogError) && <InlineMessage kind="error">{error ?? catalogError}</InlineMessage>}
 
-      <h3>Ville et quartier</h3>
-      <div className="row">
-        <div className="field">
-          <label>Ville</label>
-          <select value={selectedCity} onChange={(e) => onCityChange(e.target.value)}>
-            {cities.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>Quartier</label>
-          <select
-            value={zoneId}
-            onChange={(e) => {
-              setZoneId(e.target.value)
-              setQuote(null)
-            }}
-          >
-            {zonesForCity.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <h3>Service</h3>
+      <h3>Lieu de la prestation</h3>
       <div className="field">
-        <label>Prestation</label>
-        <select value={categoryId} onChange={(e) => onCategoryChange(e.target.value)}>
-          {categories.map((c) => (
+        <label>Pays</label>
+        <select
+          value={countryId}
+          onChange={(e) => onCountryChange(e.target.value)}
+          disabled={switchingCountry}
+        >
+          {loc.allCountries.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -327,7 +348,70 @@ export function BookingPage() {
         </select>
       </div>
 
-      {isLaundry ? (
+      {switchingCountry ? (
+        <Spinner />
+      ) : zones.length === 0 ? (
+        <InlineMessage kind="info">Aucun quartier configuré pour ce pays pour le moment.</InlineMessage>
+      ) : (
+        <div className="row">
+          <div className="field">
+            <label>Ville</label>
+            <select value={selectedCity} onChange={(e) => onCityChange(e.target.value)}>
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Quartier</label>
+            <select
+              value={zoneId}
+              onChange={(e) => {
+                setZoneId(e.target.value)
+                setQuote(null)
+              }}
+            >
+              {zonesForCity.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      <div className="field">
+        <label>Téléphone de contact</label>
+        <input
+          type="tel"
+          placeholder="+237600000000"
+          value={contactPhone}
+          onChange={(e) => setContactPhone(e.target.value)}
+        />
+      </div>
+
+      <h3>Service</h3>
+      {catalogLoading ? (
+        <Spinner />
+      ) : categories.length === 0 ? (
+        <InlineMessage kind="info">Aucun service disponible pour ce pays pour le moment.</InlineMessage>
+      ) : (
+        <div className="field">
+          <label>Prestation</label>
+          <select value={categoryId} onChange={(e) => onCategoryChange(e.target.value)}>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!catalogLoading && categories.length > 0 && isLaundry && (
         <>
           <h3>Composer le panier</h3>
           <div className="row">
@@ -403,7 +487,9 @@ export function BookingPage() {
             </ul>
           )}
         </>
-      ) : (
+      )}
+
+      {!catalogLoading && categories.length > 0 && !isLaundry && (
         <>
           <h3>Détails du service</h3>
           {!category || category.options.length === 0 ? (
@@ -447,21 +533,25 @@ export function BookingPage() {
         </>
       )}
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0' }}>
-        <input
-          type="checkbox"
-          checked={urgent}
-          onChange={(e) => {
-            setUrgent(e.target.checked)
-            setQuote(null)
-          }}
-        />
-        Urgent
-      </label>
+      {!catalogLoading && categories.length > 0 && (
+        <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0' }}>
+            <input
+              type="checkbox"
+              checked={urgent}
+              onChange={(e) => {
+                setUrgent(e.target.checked)
+                setQuote(null)
+              }}
+            />
+            Urgent
+          </label>
 
-      <button type="button" onClick={getQuote} disabled={quoting || !quoteReady}>
-        {quoting ? <Spinner /> : 'Obtenir un devis'}
-      </button>
+          <button type="button" onClick={getQuote} disabled={quoting || !quoteReady}>
+            {quoting ? <Spinner /> : 'Obtenir un devis'}
+          </button>
+        </>
+      )}
 
       {quote && (
         <>
@@ -484,10 +574,7 @@ export function BookingPage() {
             <>
               <div className="field">
                 <label>Adresse enregistrée</label>
-                <select
-                  value={selectedAddressId}
-                  onChange={(e) => setSelectedAddressId(e.target.value)}
-                >
+                <select value={selectedAddressId} onChange={(e) => setSelectedAddressId(e.target.value)}>
                   {addresses.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.landmark}
@@ -538,17 +625,12 @@ export function BookingPage() {
           </div>
           <div className="field">
             <label>Moyen de paiement (Mobile Money)</label>
-            <select
-              value={paymentProviderCode}
-              onChange={(e) => setPaymentProviderCode(e.target.value)}
-            >
+            <select value={paymentProviderCode} onChange={(e) => setPaymentProviderCode(e.target.value)}>
               <option value="mtn_momo">MTN Mobile Money</option>
               <option value="orange_money">Orange Money</option>
             </select>
           </div>
-          <p className="muted">
-            Vous ne serez débité qu'à l'arrivée du partenaire, jamais avant.
-          </p>
+          <p className="muted">Vous ne serez débité qu'à l'arrivée du partenaire, jamais avant.</p>
 
           <button
             type="button"

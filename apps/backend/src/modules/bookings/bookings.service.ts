@@ -44,6 +44,14 @@ export class BookingsService {
       throw new NotFoundException('Catégorie de service introuvable.');
     }
 
+    // Téléphone de contact : celui saisi à la réservation, sinon celui du
+    // compte client.
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { phone: true },
+    });
+    const contactPhone = dto.contactPhone?.trim() || client?.phone || null;
+
     // Le devis est toujours recalculé côté serveur à partir de la grille
     // active, jamais accepté depuis le client — §21.14.
     const quote =
@@ -82,6 +90,7 @@ export class BookingsService {
         paymentProviderCode: dto.paymentProviderCode,
         status: BookingStatus.SEARCHING_PARTNER,
         scheduledAt: new Date(dto.scheduledAt),
+        contactPhone,
         currency: quote.currency,
         pricingSnapshot: quote as any, // figé définitivement — §21.6
         estimatedTotal: quote.total,
