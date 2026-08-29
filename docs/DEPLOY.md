@@ -15,6 +15,12 @@ Chaque app a son `Dockerfile` :
 `client-web` inline `VITE_API_BASE_URL` **au build** : la valeur par défaut du
 `Dockerfile` est le backend de prod, donc rien à configurer pour démarrer.
 
+> `railway up` envoie **tout le dépôt git** comme contexte de build (pas le
+> dossier courant). D'où : chemins `COPY` préfixés par `apps/<app>/` dans les
+> Dockerfiles, un `.dockerignore` racine pour alléger le contexte, et la
+> variable de service `RAILWAY_DOCKERFILE_PATH=apps/<app>/Dockerfile` qui
+> indique à Railway quel Dockerfile utiliser.
+
 ---
 
 ## Option A — CLI Railway (recommandé)
@@ -26,27 +32,21 @@ projet :
 railway link --project iris-backend --environment production
 ```
 
-### 1. Site vitrine
+Depuis la **racine du dépôt** pour chaque app :
 
 ```
 railway add --service iris-site
-cd apps/site && railway up --service iris-site --detach && cd ../..
+railway variables --service iris-site --set "RAILWAY_DOCKERFILE_PATH=apps/site/Dockerfile"
+railway up --service iris-site --detach
 railway domain --service iris-site
-```
 
-La dernière commande génère (et affiche) une URL `https://iris-site-....up.railway.app`.
-
-### 2. Espace client web
-
-```
 railway add --service iris-client
-cd apps/client-web && railway up --service iris-client --detach && cd ../..
+railway variables --service iris-client --set "RAILWAY_DOCKERFILE_PATH=apps/client-web/Dockerfile"
+railway up --service iris-client --detach
 railway domain --service iris-client
 ```
 
-> `railway up` depuis le sous-dossier envoie uniquement ce dossier comme
-> contexte de build — le `Dockerfile` local est utilisé, pas besoin de régler
-> un « Root Directory ».
+Chaque `railway domain` génère et affiche l'URL `https://<svc>-production.up.railway.app`.
 
 ### 3. Restreindre le CORS du backend
 

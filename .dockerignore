@@ -1,0 +1,13 @@
+# Contexte de build Railway (= racine du dépôt pour les services statiques
+# iris-site / iris-client). On exclut tout ce qu'aucune de leurs images
+# n'utilise, pour accélérer l'upload et le build.
+.git
+**/node_modules
+**/dist
+**/build
+**/.dart_tool
+apps/mobile
+apps/backend
+*.log
+.env
+**/.env
