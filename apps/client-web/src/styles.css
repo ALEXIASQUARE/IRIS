@@ -1,0 +1,230 @@
+/* IRIS — espace client web.
+   Palette bleue alignée sur le logo de l'app mobile et le site vitrine
+   (apps/site). Les noms de classes utilitaires (.card, .field, .row, .btn…)
+   sont conservés pour faciliter le portage des composants existants de
+   apps/admin-web/src/client/. */
+
+:root {
+  font-family: "Segoe UI", Roboto, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: light;
+
+  --navy: #0a3d77;
+  --navy-deep: #072a52;
+  --blue: #1b7fc4;
+  --blue-soft: #eaf3fb;
+  --bg: #f3f7fb;
+  --panel: #ffffff;
+  --border: #dbe5ee;
+  --text: #16202b;
+  --muted: #5b6b7a;
+  --success: #1e8e5a;
+  --danger: #c0362c;
+  --warn: #b45309;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--blue);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  color: var(--text);
+}
+
+/* ---------- Coquille applicative ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.app-header .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-decoration: none;
+}
+.app-header .brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.app-header .spacer {
+  flex: 1;
+}
+
+.app-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+/* ---------- Blocs ---------- */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+input,
+select {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  background: #fff;
+  color: var(--text);
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:hover,
+.btn:hover {
+  background: var(--navy-deep);
+}
+button.secondary,
+.btn.secondary {
+  background: transparent;
+  color: var(--navy);
+  border-color: var(--border);
+}
+button.secondary:hover,
+.btn.secondary:hover {
+  border-color: var(--navy);
+  background: transparent;
+}
+button.danger,
+.btn.danger {
+  background: #fdecea;
+  color: var(--danger);
+}
+button:disabled,
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ---------- Messages ---------- */
+.msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.msg.error {
+  background: #fdecea;
+  border: 1px solid #f4c7c3;
+  color: var(--danger);
+}
+.msg.success {
+  background: #e7f5ee;
+  border: 1px solid #b7e0ca;
+  color: var(--success);
+}
+.msg.info {
+  background: var(--blue-soft);
+  border: 1px solid #c3e0f2;
+  color: #1d4ed8;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- Spinner ---------- */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--blue-soft);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.spinner.center {
+  display: block;
+  margin: 48px auto;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+}
