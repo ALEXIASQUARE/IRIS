@@ -9,6 +9,7 @@ import '../../catalog/catalog_repository.dart';
 import '../../client/client_repository.dart';
 import '../../countries/countries_repository.dart';
 import '../../models/address.dart';
+import '../../models/country.dart';
 import '../../models/catalog.dart';
 import '../../models/quote_result.dart';
 import '../../models/zone.dart';
@@ -58,6 +59,15 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
 
   bool _loading = true;
   String? _error;
+
+  // Pays de la prestation — sélectionnable explicitement (retour terrain :
+  // un client dont le pays n'est pas encore résolu par son profil, ou qui
+  // réserve pour un autre pays, ne pouvait pas le changer). Le catalogue de
+  // services et les quartiers dépendent du pays -> _applyCountry les
+  // recharge à chaque changement.
+  List<Country> _availableCountries = [];
+  String? _selectedCountryId;
+  bool _switchingCountry = false;
 
   String? _zoneId;
   // Toutes les zones du pays résolu, pour le sélecteur ville/quartier ci-
@@ -142,14 +152,12 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       _error = null;
     });
     try {
-      // Résout d'abord le pays à partir de la ville/quartier déjà
-      // enregistrée dans le profil du client (voir ClientProfileScreen) —
-      // une fois le profil renseigné, la réservation doit proposer les
-      // villes et quartiers du VRAI pays du client, pas systématiquement
-      // celui du catalogue par défaut (Cameroun). Repli sur le premier pays
-      // "prêt" (zones + catalogue de services actif) si le profil n'a pas
-      // encore de zone enregistrée — même simplification que App.tsx côté
-      // admin-web pour ce seul cas de repli.
+      final countries = await _countries.listCountries();
+
+      // Pays de départ : celui de la zone déjà enregistrée dans le profil du
+      // client (voir ClientProfileScreen). Repli sur le premier pays "prêt"
+      // (zones + catalogue de services) si le profil n'a pas encore de zone.
+      // Le client peut de toute façon en changer explicitement ci-dessous.
       Zone? homeZone;
       try {
         final profile = await _clientRepo.getProfile();
@@ -158,69 +166,113 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
           homeZone = await _countries.getZone(homeZoneId);
         }
       } catch (_) {
-        // repli sur le pays "prêt" ci-dessous
+        // repli ci-dessous
       }
 
-      final String countryId;
-      List<Zone> zones;
-      if (homeZone != null && homeZone.countryId != null) {
-        countryId = homeZone.countryId!;
-        zones = await _countries.listZones(countryId);
-      } else {
-        final countryWithZones = await _countries.findFirstCountryWithZones();
-        countryId = countryWithZones.country.id;
-        zones = countryWithZones.zones;
-      }
-      if (zones.isEmpty) {
-        throw ApiException(0, 'Aucune zone configurée pour votre pays pour le moment.');
-      }
+      final String initialCountryId = (homeZone != null && homeZone.countryId != null)
+          ? homeZone.countryId!
+          : (await _countries.findFirstCountryWithZones()).country.id;
 
-      final zoneId = (homeZone != null && zones.any((z) => z.id == homeZone!.id))
-          ? homeZone.id
-          : zones.first.id;
-
-      final services = await _catalog.listServices(countryId);
-
-      final results = await Future.wait([
-        _catalog.listGarmentTypes(countryId),
+      // Références indépendantes du pays + adresses du client — chargées une
+      // seule fois (un changement de pays ne les recharge pas).
+      final refs = await Future.wait([
         _catalog.listFabricCategories(),
         _catalog.listWashMethods(),
         _catalog.listStainTypes(),
         _addresses.list(),
       ]);
-
-      final resolvedZone = zones.firstWhere((z) => z.id == zoneId);
+      final savedAddresses = refs[3] as List<Address>;
 
       setState(() {
-        _zoneId = zoneId;
-        _allZones = zones;
-        _selectedCity = resolvedZone.cityName;
-        _categories = services;
-        _selectedCategoryId = services.isNotEmpty ? services.first.id : null;
-        _garmentTypes = results[0] as List<GarmentType>;
-        _fabricCategories = results[1] as List<FabricCategory>;
-        _washMethods = results[2] as List<WashMethod>;
-        _stainTypes = results[3] as List<StainType>;
-        _savedAddresses = results[4] as List<Address>;
-        _selectedGarment = _garmentTypes.isNotEmpty ? _garmentTypes.first : null;
-        _selectedOption = _selectedCategory?.options.isNotEmpty == true ? _selectedCategory!.options.first : null;
-        if (_savedAddresses.isNotEmpty) {
-          _selectedAddressId = _savedAddresses.first.id;
-          // Aligne la zone de tarification sur la vraie zone de l'adresse
-          // par défaut plutôt que sur la zone du profil, qui peut différer.
-          final matches = _allZones.where((z) => z.id == _savedAddresses.first.zoneId);
-          if (matches.isNotEmpty) {
-            _zoneId = matches.first.id;
-            _selectedCity = matches.first.cityName;
-          }
+        _availableCountries = countries;
+        _fabricCategories = refs[0] as List<FabricCategory>;
+        _washMethods = refs[1] as List<WashMethod>;
+        _stainTypes = refs[2] as List<StainType>;
+        _savedAddresses = savedAddresses;
+        if (savedAddresses.isNotEmpty) {
+          _selectedAddressId = savedAddresses.first.id;
         } else {
           _showNewAddress = true;
         }
       });
+
+      // Quartier à présélectionner : celui de l'adresse par défaut, sinon
+      // celui du profil (précédence identique à l'ancien comportement).
+      await _applyCountry(
+        initialCountryId,
+        preferredZoneIds: [
+          if (savedAddresses.isNotEmpty) savedAddresses.first.zoneId,
+          if (homeZone != null) homeZone.id,
+        ],
+      );
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : e.toString());
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Charge quartiers + catalogue de services du pays et (re)positionne
+  // ville / quartier / service. Appelé au démarrage et à chaque changement
+  // de pays.
+  Future<void> _applyCountry(String countryId, {List<String> preferredZoneIds = const []}) async {
+    final zones = await _countries.listZones(countryId);
+    if (zones.isEmpty) {
+      throw ApiException(0, 'Aucun quartier configuré pour ce pays pour le moment.');
+    }
+    final services = await _catalog.listServices(countryId);
+    final garments = await _catalog.listGarmentTypes(countryId);
+
+    Zone? zone;
+    for (final pref in preferredZoneIds) {
+      final match = zones.where((z) => z.id == pref);
+      if (match.isNotEmpty) {
+        zone = match.first;
+        break;
+      }
+    }
+    zone ??= zones.first;
+
+    setState(() {
+      _selectedCountryId = countryId;
+      _allZones = zones;
+      _zoneId = zone!.id;
+      _selectedCity = zone.cityName;
+      _categories = services;
+      _selectedCategoryId = services.isNotEmpty ? services.first.id : null;
+      _garmentTypes = garments;
+      _selectedGarment = garments.isNotEmpty ? garments.first : null;
+      _selectedOption =
+          _selectedCategory?.options.isNotEmpty == true ? _selectedCategory!.options.first : null;
+      _cart.clear();
+      _quote = null;
+    });
+  }
+
+  Future<void> _onCountryChanged(String? countryId) async {
+    if (countryId == null || countryId == _selectedCountryId) return;
+    setState(() {
+      _switchingCountry = true;
+      _error = null;
+    });
+    try {
+      await _applyCountry(countryId);
+      // Une adresse enregistrée appartient au quartier d'un pays donné : si
+      // aucune ne correspond au nouveau pays, on bascule sur la saisie d'une
+      // nouvelle adresse.
+      final hasMatch = _savedAddresses.any((a) => _allZones.any((z) => z.id == a.zoneId));
+      if (!hasMatch) {
+        setState(() {
+          _selectedAddressId = null;
+          _showNewAddress = true;
+        });
+      }
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _switchingCountry = false);
     }
   }
 
@@ -460,29 +512,45 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Ville et quartier de la prestation', style: Theme.of(context).textTheme.titleMedium),
+          Text('Lieu de la prestation', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedCity,
-                  decoration: const InputDecoration(labelText: 'Ville'),
-                  items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: _onCityChanged,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _zoneId,
-                  decoration: const InputDecoration(labelText: 'Quartier'),
-                  items: _zonesForSelectedCity.map((z) => DropdownMenuItem(value: z.id, child: Text(z.name))).toList(),
-                  onChanged: _onZoneChanged,
-                ),
-              ),
-            ],
+          DropdownButtonFormField<String>(
+            initialValue: _selectedCountryId,
+            decoration: const InputDecoration(labelText: 'Pays'),
+            items: _availableCountries
+                .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                .toList(),
+            onChanged: _switchingCountry ? null : _onCountryChanged,
           ),
+          const SizedBox(height: 12),
+          if (_switchingCountry)
+            const LinearProgressIndicator()
+          else if (_allZones.isEmpty)
+            const InlineMessage.info('Aucun quartier configuré pour ce pays pour le moment.')
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedCity,
+                    decoration: const InputDecoration(labelText: 'Ville'),
+                    items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                    onChanged: _onCityChanged,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _zoneId,
+                    decoration: const InputDecoration(labelText: 'Quartier'),
+                    items: _zonesForSelectedCity
+                        .map((z) => DropdownMenuItem(value: z.id, child: Text(z.name)))
+                        .toList(),
+                    onChanged: _onZoneChanged,
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 24),
           Text('1. Choisir un service', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
