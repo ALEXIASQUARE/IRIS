@@ -11,7 +11,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:e2e": "jest --config ./test/jest-e2e.json --forceExit"
+    "test:e2e": "jest --config ./test/jest-e2e.json --forceExit",
+    "backfill:catalogs": "ts-node prisma/backfill-catalogs.ts"
   },
   "engines": {
     "node": ">=20.0.0"
