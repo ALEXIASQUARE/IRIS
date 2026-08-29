@@ -38,9 +38,9 @@ export function LoginPage() {
         <img
           src="/logo.jpg"
           alt="IRIS"
-          width={64}
-          height={64}
-          style={{ borderRadius: 14, display: 'block', margin: '0 auto 16px' }}
+          width={112}
+          height={112}
+          style={{ borderRadius: 18, display: 'block', margin: '0 auto 16px' }}
         />
         <h2 style={{ textAlign: 'center', marginTop: 0 }}>Connexion</h2>
 
