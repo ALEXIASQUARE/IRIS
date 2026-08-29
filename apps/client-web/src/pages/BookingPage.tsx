@@ -32,6 +32,13 @@ function stripName({ garmentName, ...rest }: CartItem): LaundryItemInput {
   return rest
 }
 
+// Le backend rejette toute propriété inconnue (ValidationPipe
+// forbidNonWhitelisted). `contactPhone` n'est envoyé qu'une fois le backend
+// déployé avec la migration 20260829120000 — passer à `true` à ce moment-là.
+// D'ici là le champ reste visible (le client confirme son numéro) mais
+// n'est pas transmis.
+const SEND_CONTACT_PHONE = false
+
 export function BookingPage() {
   const navigate = useNavigate()
   const loc = useResolvedLocation()
@@ -296,7 +303,7 @@ export function BookingPage() {
         scheduledAt: new Date(scheduledAt).toISOString(),
         paymentProviderCode,
         urgent,
-        contactPhone: contactPhone.trim(),
+        ...(SEND_CONTACT_PHONE ? { contactPhone: contactPhone.trim() } : {}),
         ...(isLaundry
           ? { laundryItems: cart.map(stripName) }
           : {
