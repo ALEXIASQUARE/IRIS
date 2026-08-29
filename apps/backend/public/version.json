@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "version": "1.3.2",
+  "versionCode": 8,
+  "version": "1.3.3",
   "apkUrl": "https://backend-production-21788.up.railway.app/latest.apk",
-  "notes": "Espace partenaire : le pays, la ville et le quartier s'affichent maintenant séparément au lieu de la seule zone."
+  "notes": "Réservation : vous pouvez maintenant choisir le pays de la prestation. Interface entièrement redessinée (couleurs, écrans, messages). Services disponibles dans davantage de pays."
 }
