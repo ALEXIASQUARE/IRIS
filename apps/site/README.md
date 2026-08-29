@@ -34,16 +34,13 @@ Le bouton Android pointe vers l'APK servi par le backend :
 
 ## Déploiement
 
-Site 100 % statique — au choix :
+`Dockerfile` fourni : `nginx` sert les fichiers statiques tels quels (aucun
+build). Déploiement Railway : service dédié, *Root Directory* = `apps/site`,
+builder Dockerfile. Voir `docs/DEPLOY.md`.
 
-- **Service statique Railway / Netlify / Vercel** : dossier racine `apps/site`,
-  aucune commande de build, dossier de publication `apps/site`.
-- **Servi par le backend** : copier le contenu dans `apps/backend/public/`
-  (déjà exposé via `app.useStaticAssets`) — le site serait alors accessible à
-  la racine du domaine backend.
-
-Penser à restreindre `enableCors()` du backend aux origines réelles une fois
-le domaine du site connu (`apps/backend/src/main.ts`).
+Alternative : `nginx.conf` n'est pas nécessaire hors Railway — le contenu
+peut aussi être copié dans `apps/backend/public/` (déjà exposé via
+`app.useStaticAssets`) pour être servi à la racine du domaine backend.
 
 ## À compléter
 

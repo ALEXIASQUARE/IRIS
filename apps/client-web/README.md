@@ -48,8 +48,11 @@ Pour viser la prod : `https://backend-production-21788.up.railway.app/api/v1`.
 
 ## Build / déploiement
 
-`npm run build` → `dist/` statique. Déployable sur n'importe quel hébergeur
-de fichiers statiques (Railway static, Netlify, Vercel). Penser à :
+`Dockerfile` fourni : build Vite multi-étapes puis `nginx` qui sert `dist/`
+avec repli SPA (`nginx.conf` — toute route → `index.html`).
 
-- une règle de réécriture SPA (toutes les routes → `index.html`) ;
-- restreindre `enableCors()` du backend à l'origine réelle du site.
+- `VITE_API_BASE_URL` est **inliné au build** : valeur par défaut = backend
+  de prod, surchargeable via un build arg Railway.
+- Déploiement Railway : service dédié, *Root Directory* = `apps/client-web`,
+  builder Dockerfile. Voir `docs/DEPLOY.md`.
+- Une fois l'URL connue, l'ajouter à `CORS_ORIGINS` sur le service backend.

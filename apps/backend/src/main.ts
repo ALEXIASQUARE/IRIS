@@ -28,7 +28,13 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors(); // à restreindre à des origines explicites en production
+  // CORS : ouvert par défaut (dev). En production, définir CORS_ORIGINS =
+  // liste d'origines séparées par des virgules (le site vitrine + l'espace
+  // client web) pour restreindre — §13.
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.enableCors(corsOrigins && corsOrigins.length > 0 ? { origin: corsOrigins } : {});
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
