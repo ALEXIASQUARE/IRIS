@@ -1,13 +1,11 @@
-# Contexte de build Railway (= racine du dépôt pour les services statiques
-# iris-site / iris-client). On exclut tout ce qu'aucune de leurs images
-# n'utilise, pour accélérer l'upload et le build.
+# Contexte de build Railway (= racine du dépôt : `railway up` envoie tout le
+# dépôt git). On exclut le lourd et l'inutile pour alléger l'upload/build,
+# mais SURTOUT PAS un dossier d'app : `railway up --service backend`
+# s'appuie sur ce même .dockerignore, exclure apps/backend faisait échouer
+# le déploiement du backend (Railpack ne trouvait plus de Dockerfile).
 .git
 **/node_modules
 **/dist
 **/build
 **/.dart_tool
-apps/mobile
-apps/backend
 *.log
-.env
-**/.env
