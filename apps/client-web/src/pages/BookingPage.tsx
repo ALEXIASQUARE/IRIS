@@ -37,7 +37,7 @@ function stripName({ garmentName, ...rest }: CartItem): LaundryItemInput {
 // déployé avec la migration 20260829120000 — passer à `true` à ce moment-là.
 // D'ici là le champ reste visible (le client confirme son numéro) mais
 // n'est pas transmis.
-const SEND_CONTACT_PHONE = false
+const SEND_CONTACT_PHONE = true
 
 export function BookingPage() {
   const navigate = useNavigate()
