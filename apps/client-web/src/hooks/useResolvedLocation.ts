@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getClientProfile } from '../api/account'
-import { getZone, listCountries, listZones } from '../api/catalog'
+import { getZone, listCountries, listServices, listZones } from '../api/catalog'
 import type { Country, Zone } from '../types'
 
 export interface ResolvedLocation {
@@ -58,13 +58,19 @@ export function useResolvedLocation(): ResolvedLocation {
           resolvedCountry = countries.find((c) => c.id === resolvedCountryId) ?? null
           zoneList = await listZones(resolvedCountryId)
         } else {
+          // Repli : premier pays qui a A LA FOIS des quartiers ET un
+          // catalogue de services actif. Sans le test des services, on
+          // tombe sur un pays de test (ex : Belgique -> quartiers mais
+          // aucun service) et la reservation reste bloquee -- meme
+          // correctif que findFirstCountryWithZones cote mobile.
           for (const c of countries) {
             const list = await listZones(c.id)
-            if (list.length > 0) {
-              resolvedCountry = c
-              zoneList = list
-              break
-            }
+            if (list.length === 0) continue
+            const services = await listServices(c.id)
+            if (services.length === 0) continue
+            resolvedCountry = c
+            zoneList = list
+            break
           }
         }
 
