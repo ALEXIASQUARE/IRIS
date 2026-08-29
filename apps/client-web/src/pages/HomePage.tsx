@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { NotificationsCard } from '../components/NotificationsCard'
 
 export function HomePage() {
   return (
@@ -20,6 +21,8 @@ export function HomePage() {
           </Link>
         </div>
       </div>
+
+      <NotificationsCard />
     </>
   )
 }

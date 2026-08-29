@@ -203,6 +203,73 @@ button:disabled,
   font-size: 14px;
 }
 
+/* ---------- Reservation / suivi ---------- */
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.total {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 4px 0 12px;
+}
+
+.pin {
+  background: #fefce8;
+  border: 2px solid #eab308;
+  color: #854d0e;
+  padding: 16px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  margin: 12px 0;
+}
+
+.cart,
+.notif-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.cart li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.notif-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quote {
+  background: var(--blue-soft);
+  border: 1px solid #c3e0f2;
+  border-radius: 10px;
+  padding: 14px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.quote-total {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy);
+  margin-top: 8px;
+}
+
 /* ---------- Spinner ---------- */
 .spinner {
   display: inline-block;
