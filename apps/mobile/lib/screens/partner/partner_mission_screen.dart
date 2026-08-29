@@ -11,6 +11,9 @@ import '../../missions/missions_repository.dart';
 import '../../models/booking.dart';
 import '../../models/booking_status_labels.dart';
 import '../../partners/partners_repository.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 import '../../widgets/route_map_view.dart';
 import '../shared/incident_report_form.dart';
 
@@ -61,10 +64,12 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
     _locationTracker = LocationTracker(
       PartnersRepository(client),
       onPosition: (lat, lng) {
-        if (mounted) setState(() {
-          _myPosition = LatLng(lat, lng);
-          _locationError = null;
-        });
+        if (mounted) {
+          setState(() {
+            _myPosition = LatLng(lat, lng);
+            _locationError = null;
+          });
+        }
       },
       onError: (message) {
         if (mounted) setState(() => _locationError = message);
@@ -85,10 +90,12 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
   Future<void> _poll() async {
     try {
       final booking = await _bookings.get(widget.bookingId);
-      if (mounted) setState(() {
-        _booking = booking;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _booking = booking;
+          _error = null;
+        });
+      }
       if (_trackingStatuses.contains(booking.status)) {
         unawaited(_locationTracker.start());
       } else {
@@ -168,16 +175,21 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final theme = Theme.of(context);
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: IrisTheme.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_error != null) ...[
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            InlineMessage.error(_error!),
             const SizedBox(height: 12),
           ],
-          Chip(label: Text(bookingStatusLabel(booking.status))),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Chip(label: Text(bookingStatusLabel(booking.status))),
+          ),
           const SizedBox(height: 16),
           if (_trackingStatuses.contains(booking.status) && booking.address != null) ...[
             RouteMapView(
@@ -186,7 +198,7 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
             ),
             const SizedBox(height: 8),
             if (_locationError != null) ...[
-              Text(_locationError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13)),
+              InlineMessage.info(_locationError!),
               const SizedBox(height: 8),
             ],
             OutlinedButton.icon(
@@ -197,26 +209,31 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
             const SizedBox(height: 16),
           ],
           if (booking.status == 'PARTNER_ASSIGNED')
-            FilledButton(
-              onPressed: _busy ? null : () => _call(() => _missions.markEnRoute(widget.bookingId)),
-              child: const Text('En route vers le client'),
+            LoadingFilledButton(
+              onPressed: () => _call(() => _missions.markEnRoute(widget.bookingId)),
+              busy: _busy,
+              label: 'En route vers le client',
             ),
           if (booking.status == 'PARTNER_EN_ROUTE')
-            FilledButton(
-              onPressed: _busy ? null : () => _call(() => _missions.markArrived(widget.bookingId)),
-              child: const Text('Je suis arrivé'),
+            LoadingFilledButton(
+              onPressed: () => _call(() => _missions.markArrived(widget.bookingId)),
+              busy: _busy,
+              label: 'Je suis arrivé',
             ),
           if (booking.status == 'ARRIVED')
-            FilledButton(
-              onPressed: _busy ? null : () => _call(() => _bookings.requestPayment(widget.bookingId)),
-              child: const Text('Demander le paiement au client'),
+            LoadingFilledButton(
+              onPressed: () => _call(() => _bookings.requestPayment(widget.bookingId)),
+              busy: _busy,
+              label: 'Demander le paiement au client',
             ),
           if (booking.status == 'PENDING_PAYMENT')
-            const Text('Demande de paiement envoyée — en attente de confirmation du client…'),
+            const InlineMessage.info(
+              'Demande de paiement envoyée — en attente de confirmation du client…',
+            ),
           if (booking.status == 'PAID') ...[
-            Text('Paiement effectué.', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text('Demandez le code PIN au client.'),
+            const InlineMessage.success('Paiement effectué.'),
+            const SizedBox(height: 12),
+            Text('Demandez le code PIN au client.', style: theme.textTheme.bodyMedium),
             const SizedBox(height: 8),
             TextField(
               controller: _pinController,
@@ -225,40 +242,45 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
               decoration: const InputDecoration(labelText: 'Code PIN'),
               onChanged: (_) => setState(() {}),
             ),
-            FilledButton(
-              onPressed: (_busy || _pinController.text.trim().length < 4)
+            LoadingFilledButton(
+              onPressed: _pinController.text.trim().length < 4
                   ? null
                   : () => _call(() => _missions.startMission(widget.bookingId, _pinController.text.trim())),
-              child: const Text('Démarrer la mission'),
+              busy: _busy,
+              label: 'Démarrer la mission',
             ),
           ],
           if (booking.status == 'IN_PROGRESS') ...[
-            const Text('Mission en cours.'),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _busy ? null : () => _call(() => _missions.completeMission(widget.bookingId)),
-              child: const Text('Terminer la mission'),
+            const InlineMessage.info('Mission en cours.'),
+            const SizedBox(height: 12),
+            LoadingFilledButton(
+              onPressed: () => _call(() => _missions.completeMission(widget.bookingId)),
+              busy: _busy,
+              label: 'Terminer la mission',
             ),
           ],
           if (booking.status == 'COMPLETED') ...[
-            const Text('Mission terminée.'),
-            const SizedBox(height: 8),
+            const InlineMessage.success('Mission terminée.'),
+            const SizedBox(height: 12),
             OutlinedButton(onPressed: widget.onDone, child: const Text('Retour aux offres')),
           ],
           if (booking.status == 'CANCELLED') ...[
-            Text('Commande annulée.', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 8),
+            const InlineMessage.error('Commande annulée.'),
+            const SizedBox(height: 12),
             OutlinedButton(onPressed: widget.onDone, child: const Text('Retour aux offres')),
           ],
           if (_abandonableStatuses.contains(booking.status)) ...[
             const SizedBox(height: 16),
             OutlinedButton(
               onPressed: _busy ? null : _abandonMission,
-              style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+              style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
               child: const Text('Abandonner la mission'),
             ),
           ],
-          if (booking.status != 'CANCELLED') IncidentReportForm(bookingId: widget.bookingId),
+          if (booking.status != 'CANCELLED') ...[
+            const SizedBox(height: 8),
+            IncidentReportForm(bookingId: widget.bookingId),
+          ],
         ],
       ),
     );

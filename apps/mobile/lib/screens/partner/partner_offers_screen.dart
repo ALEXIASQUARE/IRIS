@@ -7,6 +7,8 @@ import '../../missions/missions_repository.dart';
 import '../../models/booking_status_labels.dart';
 import '../../models/partner_offer.dart';
 import '../../partners/partners_repository.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
 
 // Même logique que PartnerOffers.tsx (admin-web) : sondage toutes les 3s
 // des offres en attente pour ce partenaire.
@@ -47,11 +49,13 @@ class _PartnerOffersScreenState extends State<PartnerOffersScreen> {
   Future<void> _poll() async {
     try {
       final offers = await _partners.listOffers();
-      if (mounted) setState(() {
-        _offers = offers;
-        _error = null;
-        _loadedOnce = true;
-      });
+      if (mounted) {
+        setState(() {
+          _offers = offers;
+          _error = null;
+          _loadedOnce = true;
+        });
+      }
     } on ApiException catch (e) {
       if (mounted && !_loadedOnce) setState(() => _error = e.message);
     }
@@ -92,16 +96,24 @@ class _PartnerOffersScreenState extends State<PartnerOffersScreen> {
     return RefreshIndicator(
       onRefresh: _poll,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: IrisTheme.pagePadding,
         children: [
           if (_error != null) ...[
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            InlineMessage.error(_error!),
             const SizedBox(height: 12),
           ],
           if (_offers.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 48),
-              child: Center(child: Text('Aucune offre de mission pour le moment.')),
+            Padding(
+              padding: const EdgeInsets.only(top: 64),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.inbox_outlined, size: 40, color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(height: 12),
+                    const Text('Aucune offre de mission pour le moment.'),
+                  ],
+                ),
+              ),
             )
           else
             ..._offers.map((offer) {
@@ -109,11 +121,14 @@ class _PartnerOffersScreenState extends State<PartnerOffersScreen> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: IrisTheme.cardPadding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(offer.booking.addressLandmark ?? 'Adresse non précisée'),
+                      Text(
+                        offer.booking.addressLandmark ?? 'Adresse non précisée',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '${bookingStatusLabel(offer.booking.status)} — ${offer.booking.estimatedTotal.toStringAsFixed(0)} ${offer.booking.currency}',

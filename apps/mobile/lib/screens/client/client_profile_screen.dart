@@ -7,6 +7,9 @@ import '../../client/client_repository.dart';
 import '../../countries/countries_repository.dart';
 import '../../models/country.dart';
 import '../../models/zone.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 
 // Pendant de PartnerProfileScreen côté client : le client n'avait aucun
 // moyen d'indiquer ni de corriger son pays/sa ville/son quartier par défaut
@@ -190,14 +193,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       appBar: AppBar(title: const Text('Mon profil')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: IrisTheme.pagePadding,
           children: [
             Text('Pays, ville et quartier', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             if (_loadingCountries)
               const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
             else if (_countriesError != null) ...[
-              Text(_countriesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              InlineMessage.error(_countriesError!),
               const SizedBox(height: 8),
               OutlinedButton(onPressed: _loadInitial, child: const Text('Réessayer')),
             ] else ...[
@@ -211,17 +214,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               if (_loadingZones)
                 const LinearProgressIndicator()
               else if (_zonesError != null) ...[
-                Text(_zonesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                InlineMessage.error(_zonesError!),
                 const SizedBox(height: 8),
                 OutlinedButton(
                   onPressed: () => _selectedCountryId == null ? null : _loadZones(_selectedCountryId!),
                   child: const Text('Réessayer'),
                 ),
               ] else if (_selectedCountryId != null && _zones.isEmpty) ...[
-                Text(
-                  'Aucune zone configurée pour ce pays pour le moment.',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+                const InlineMessage.info('Aucune zone configurée pour ce pays pour le moment.'),
               ] else if (_selectedCountryId != null) ...[
                 DropdownButtonFormField<String>(
                   initialValue: _selectedCity,
@@ -244,16 +244,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   onChanged: (value) => setState(() => _selectedZoneId = value),
                 ),
               ],
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: (_savingZone || _selectedZoneId == null) ? null : _saveZone,
-                child: _savingZone
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Enregistrer'),
+              const SizedBox(height: 16),
+              LoadingFilledButton(
+                onPressed: _selectedZoneId == null ? null : _saveZone,
+                busy: _savingZone,
+                label: 'Enregistrer',
               ),
               if (_zoneSaveMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(_zoneSaveMessage!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                const SizedBox(height: 12),
+                InlineMessage.success(_zoneSaveMessage!),
               ],
             ],
             const Divider(height: 40),
@@ -276,20 +275,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Confirmer le nouveau mot de passe'),
             ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _savingPassword ? null : _changePassword,
-              child: _savingPassword
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Changer le mot de passe'),
+            const SizedBox(height: 16),
+            LoadingFilledButton(
+              onPressed: _changePassword,
+              busy: _savingPassword,
+              label: 'Changer le mot de passe',
             ),
             if (_passwordError != null) ...[
-              const SizedBox(height: 8),
-              Text(_passwordError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              const SizedBox(height: 12),
+              InlineMessage.error(_passwordError!),
             ],
             if (_passwordSuccess != null) ...[
-              const SizedBox(height: 8),
-              Text(_passwordSuccess!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+              const SizedBox(height: 12),
+              InlineMessage.success(_passwordSuccess!),
             ],
           ],
         ),

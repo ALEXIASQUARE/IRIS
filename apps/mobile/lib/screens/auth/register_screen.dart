@@ -6,6 +6,9 @@ import '../../auth/auth_repository.dart';
 import '../../countries/countries_repository.dart';
 import '../../models/country.dart';
 import '../../models/zone.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 import 'verify_otp_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -164,7 +167,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(title: const Text('Créer un compte')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: IrisTheme.pagePadding,
           child: Form(
             key: _formKey,
             child: Column(
@@ -205,7 +208,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 if (_loadingCountries)
                   const LinearProgressIndicator()
                 else if (_countriesError != null) ...[
-                  Text(_countriesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  InlineMessage.error(_countriesError!),
                   const SizedBox(height: 8),
                   OutlinedButton(onPressed: _loadCountries, child: const Text('Réessayer')),
                 ] else
@@ -220,17 +223,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   if (_loadingZones)
                     const LinearProgressIndicator()
                   else if (_zonesError != null) ...[
-                    Text(_zonesError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    InlineMessage.error(_zonesError!),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: () => _loadZones(_selectedCountryIso!),
                       child: const Text('Réessayer'),
                     ),
                   ] else if (_zones.isEmpty) ...[
-                    Text(
-                      'Aucune zone configurée pour ce pays pour le moment.',
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+                    const InlineMessage.info('Aucune zone configurée pour ce pays pour le moment.'),
                   ] else ...[
                     DropdownButtonFormField<String>(
                       initialValue: _selectedCity,
@@ -258,17 +258,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  InlineMessage.error(_error!),
                 ],
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: _submitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text("S'inscrire"),
-                  ),
+                LoadingFilledButton(
+                  onPressed: _submit,
+                  busy: _submitting,
+                  label: "S'inscrire",
                 ),
               ],
             ),

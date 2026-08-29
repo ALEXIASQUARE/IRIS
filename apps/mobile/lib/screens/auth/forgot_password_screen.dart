@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../../api/api_client.dart';
 import '../../api/api_exception.dart';
 import '../../auth/auth_repository.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 import 'reset_password_screen.dart';
 
 // Mot de passe oublié, étape 1 : demande d'un code par SMS. Même structure
@@ -52,34 +55,36 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Mot de passe oublié')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: IrisTheme.pagePadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Entrez le numéro de téléphone de votre compte. Un code vous sera envoyé par SMS.'),
+              Text(
+                'Entrez le numéro de téléphone de votre compte. Un code vous sera envoyé par SMS.',
+                style: text.bodyLarge,
+              ),
               const SizedBox(height: 24),
               TextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitting ? null : _submit(),
                 decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+237600000000'),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                InlineMessage.error(_error!),
               ],
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _submitting ? null : _submit,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: _submitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Recevoir un code'),
-                ),
+              LoadingFilledButton(
+                onPressed: _submit,
+                busy: _submitting,
+                label: 'Recevoir un code',
               ),
             ],
           ),

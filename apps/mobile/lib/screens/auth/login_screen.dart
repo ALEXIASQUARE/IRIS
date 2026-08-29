@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../api/api_exception.dart';
 import '../../auth/auth_state.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/iris_logo.dart';
+import '../../widgets/loading_button.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
@@ -56,15 +60,19 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(title: Text(isPartner ? 'Connexion partenaire' : 'Connexion client')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: IrisTheme.pagePadding,
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 8),
+                const Center(child: IrisLogo(size: 72)),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(labelText: 'Téléphone', hintText: '+237600000000'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
                 ),
@@ -72,24 +80,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submitting ? null : _submit(),
                   decoration: const InputDecoration(labelText: 'Mot de passe'),
                   validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  InlineMessage.error(_error!),
                 ],
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: _submitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Se connecter'),
-                  ),
+                LoadingFilledButton(
+                  onPressed: _submit,
+                  busy: _submitting,
+                  label: 'Se connecter',
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => RegisterScreen(role: widget.intendedRole)),

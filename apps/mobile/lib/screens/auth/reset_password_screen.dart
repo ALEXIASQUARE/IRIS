@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../api/api_exception.dart';
 import '../../auth/auth_state.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 
 // Mot de passe oublié, étape 2 : code + nouveau mot de passe. En cas de
 // succès, la session s'ouvre automatiquement (voir AuthState.resetPassword)
@@ -67,21 +70,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Réinitialiser le mot de passe')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: IrisTheme.pagePadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Un code a été envoyé au ${widget.phone}.'),
+              Text('Un code a été envoyé au ${widget.phone}.', style: text.bodyLarge),
               if (widget.devOtp != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '(Mode dev : code pré-rempli automatiquement.)',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                const SizedBox(height: 12),
+                const InlineMessage.info('Mode dev : le code est pré-rempli automatiquement.'),
               ],
               const SizedBox(height: 24),
               TextField(
@@ -103,17 +104,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                InlineMessage.error(_error!),
               ],
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _submitting ? null : _submit,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: _submitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Réinitialiser et se connecter'),
-                ),
+              LoadingFilledButton(
+                onPressed: _submit,
+                busy: _submitting,
+                label: 'Réinitialiser et se connecter',
               ),
             ],
           ),

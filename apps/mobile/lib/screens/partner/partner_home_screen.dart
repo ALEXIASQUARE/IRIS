@@ -7,6 +7,8 @@ import '../../countries/countries_repository.dart';
 import '../../models/partner_profile.dart';
 import '../../models/zone.dart';
 import '../../partners/partners_repository.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
 import 'partner_mission_screen.dart';
 import 'partner_offers_screen.dart';
 import 'partner_profile_screen.dart';
@@ -199,15 +201,15 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
               children: [
                 if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: InlineMessage.error(_error!),
                   ),
                 if (!_isActive && _profileStatus != null)
                   Card(
-                    margin: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     color: Theme.of(context).colorScheme.errorContainer,
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: IrisTheme.cardPadding,
                       child: Row(
                         children: [
                           Icon(Icons.hourglass_top, color: Theme.of(context).colorScheme.onErrorContainer),
@@ -225,7 +227,7 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                 Card(
                   margin: const EdgeInsets.all(16),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: IrisTheme.cardPadding,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -234,18 +236,30 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Pays : ${_countryName ?? '—'}'),
-                              Text('Ville : ${_cityName ?? '—'}'),
-                              Text('Quartier : ${_zoneName ?? '—'}'),
-                              const SizedBox(height: 4),
-                              Text(
-                                _available ? 'Disponible' : 'Indisponible',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: _available
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.error,
-                                ),
+                              _LocationLine(label: 'Pays', value: _countryName),
+                              _LocationLine(label: 'Ville', value: _cityName),
+                              _LocationLine(label: 'Quartier', value: _zoneName),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(
+                                    _available ? Icons.circle : Icons.circle_outlined,
+                                    size: 12,
+                                    color: _available
+                                        ? IrisTheme.successColor(context)
+                                        : Theme.of(context).colorScheme.outline,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _available ? 'Disponible' : 'Indisponible',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: _available
+                                          ? IrisTheme.successColor(context)
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -268,10 +282,21 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(24),
-                            child: Text(
-                              'Vous recevrez des offres de mission une fois votre profil approuvé.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.verified_user_outlined,
+                                  size: 40,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Vous recevrez des offres de mission une fois votre profil approuvé.',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
                           ),
                         )
@@ -284,6 +309,37 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+// Ligne « Libellé : valeur » de la carte de statut, avec le libellé en
+// retrait visuel pour que la valeur ressorte.
+class _LocationLine extends StatelessWidget {
+  const _LocationLine({required this.label, required this.value});
+
+  final String label;
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 68,
+            child: Text(label, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+          ),
+          Expanded(
+            child: Text(
+              value ?? '—',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

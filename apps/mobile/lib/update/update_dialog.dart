@@ -7,6 +7,7 @@ Future<void> showUpdateDialog(BuildContext context, UpdateInfo update) {
     context: context,
     barrierDismissible: true,
     builder: (context) => AlertDialog(
+      icon: const Icon(Icons.system_update),
       title: const Text('Nouvelle version disponible'),
       content: Text(
         'La version ${update.version} d\'IRIS est disponible.'

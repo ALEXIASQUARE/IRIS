@@ -4,6 +4,9 @@ import '../../api/api_client.dart';
 import '../../api/api_exception.dart';
 import '../../incidents/incidents_repository.dart';
 import '../../models/incident.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 
 const _typeLabels = {
   'OBJET_ENDOMMAGE': 'Objet endommagé',
@@ -95,21 +98,21 @@ class _IncidentReportFormState extends State<IncidentReportForm> {
     if (_sent) {
       return const Padding(
         padding: EdgeInsets.only(top: 8),
-        child: Text('Incident signalé, merci.'),
+        child: InlineMessage.success('Incident signalé, merci.'),
       );
     }
 
     return Card(
       margin: const EdgeInsets.only(top: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: IrisTheme.cardPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('Signaler un incident', style: Theme.of(context).textTheme.titleMedium),
             if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              const SizedBox(height: 12),
+              InlineMessage.error(_error!),
             ],
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -144,11 +147,10 @@ class _IncidentReportFormState extends State<IncidentReportForm> {
             Row(
               children: [
                 Expanded(
-                  child: FilledButton(
-                    onPressed: _submitting ? null : _submit,
-                    child: _submitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Envoyer'),
+                  child: LoadingFilledButton(
+                    onPressed: _submit,
+                    busy: _submitting,
+                    label: 'Envoyer',
                   ),
                 ),
                 const SizedBox(width: 8),

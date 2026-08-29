@@ -13,6 +13,9 @@ import '../../models/catalog.dart';
 import '../../models/quote_result.dart';
 import '../../models/zone.dart';
 import '../../pricing/pricing_repository.dart';
+import '../../theme.dart';
+import '../../widgets/inline_message.dart';
+import '../../widgets/loading_button.dart';
 
 class _CartItem {
   final GarmentType garment;
@@ -438,7 +441,14 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(_error!, textAlign: TextAlign.center),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InlineMessage.error(_error!),
+              const SizedBox(height: 16),
+              OutlinedButton(onPressed: _load, child: const Text('Réessayer')),
+            ],
+          ),
         ),
       );
     }
@@ -446,7 +456,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     final category = _selectedCategory;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: IrisTheme.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -603,11 +613,10 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
               _quote = null;
             }),
           ),
-          FilledButton(
-            onPressed: (_quoting || (_isLaundry ? _cart.isEmpty : _selectedOption == null)) ? null : _getQuote,
-            child: _quoting
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Obtenir un devis'),
+          LoadingFilledButton(
+            onPressed: (_isLaundry ? _cart.isEmpty : _selectedOption == null) ? null : _getQuote,
+            busy: _quoting,
+            label: 'Obtenir un devis',
           ),
           if (_quote != null) ...[
             const SizedBox(height: 12),
@@ -712,17 +721,13 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              InlineMessage.error(_error!),
             ],
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _submitting ? null : _confirm,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: _submitting
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Confirmer la réservation'),
-              ),
+            LoadingFilledButton(
+              onPressed: _confirm,
+              busy: _submitting,
+              label: 'Confirmer la réservation',
             ),
           ],
         ],
