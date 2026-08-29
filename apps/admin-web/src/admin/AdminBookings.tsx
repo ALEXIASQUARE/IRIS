@@ -50,7 +50,10 @@ export default function AdminBookings({
 
   async function load() {
     try {
-      const qs = new URLSearchParams({ page: String(page), pageSize: '25' });
+      // 10 par page : la liste tient sur un écran et les boutons
+      // Précédent / Suivant deviennent réellement utilisables (25 masquait
+      // la pagination tant qu'il y avait moins de 25 réservations).
+      const qs = new URLSearchParams({ page: String(page), pageSize: '10' });
       if (statusFilter) qs.set('status', statusFilter);
       if (clientFilter) qs.set('clientId', clientFilter.id);
       const data = await apiRequest<AdminBookingList>('GET', `/admin/bookings?${qs.toString()}`, { token });
