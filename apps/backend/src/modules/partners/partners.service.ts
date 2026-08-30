@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { OfferStatus, PartnerStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MissionsService } from '../missions/missions.service';
+import { ACTIVE_MISSION_STATUSES } from '../../common/mission-status';
 import { UpsertPartnerProfileDto } from './dto/upsert-partner-profile.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
@@ -89,11 +90,35 @@ export class PartnersService {
     }
   }
 
+  // Mission en cours du partenaire (assignée et non terminée), s'il y en a
+  // une. Sert à ré-afficher la mission au redémarrage de l'app plutôt que
+  // la liste d'offres.
+  async getActiveMission(userId: string): Promise<{ bookingId: string } | null> {
+    const profile = await this.prisma.partnerProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundException("Profil partenaire introuvable — créez d'abord votre profil.");
+    }
+    const booking = await this.prisma.booking.findFirst({
+      where: { assignedPartnerId: profile.id, status: { in: ACTIVE_MISSION_STATUSES } },
+      select: { id: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return booking ? { bookingId: booking.id } : null;
+  }
+
   async listOffers(userId: string) {
     const profile = await this.prisma.partnerProfile.findUnique({ where: { userId } });
     if (!profile) {
       throw new NotFoundException("Profil partenaire introuvable — créez d'abord votre profil.");
     }
+
+    // Une seule mission à la fois : tant qu'il en a une en cours, aucune
+    // offre ne lui est présentée.
+    const ongoing = await this.prisma.booking.findFirst({
+      where: { assignedPartnerId: profile.id, status: { in: ACTIVE_MISSION_STATUSES } },
+      select: { id: true },
+    });
+    if (ongoing) return [];
 
     return this.prisma.offer.findMany({
       where: {

@@ -3,6 +3,7 @@ import { BookingStatus, OfferStatus, OfferChannel, Prisma } from '@prisma/client
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notifications/notification.service';
 import { CreatePriceRevisionDto } from './dto/create-price-revision.dto';
+import { ACTIVE_MISSION_STATUSES } from '../../common/mission-status';
 
 // ─────────────────────────────────────────────────────────────────────────
 // MissionsService — implémente l'algorithme de matching décrit dans
@@ -142,6 +143,23 @@ export class MissionsService {
     }
     if (offer.expiresAt < new Date()) {
       throw new ConflictException('Cette offre a expiré.');
+    }
+
+    // Une seule mission à la fois : un partenaire déjà engagé sur une
+    // mission non terminée ne peut pas en accepter une autre. `isAvailable`
+    // le protège des NOUVELLES diffusions, mais pas d'une offre reçue avant
+    // l'acceptation (client obsolète, course, admin-web…).
+    const ongoing = await this.prisma.booking.findFirst({
+      where: {
+        assignedPartnerId: offer.partnerProfileId,
+        status: { in: ACTIVE_MISSION_STATUSES },
+      },
+      select: { id: true },
+    });
+    if (ongoing) {
+      throw new ConflictException(
+        "Vous avez déjà une mission en cours — terminez-la ou abandonnez-la avant d'en accepter une autre.",
+      );
     }
 
     // La requête conditionnelle : updateMany avec un WHERE sur le statut

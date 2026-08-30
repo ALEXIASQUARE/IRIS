@@ -28,6 +28,9 @@ describe('MissionsService — acceptOffer (verrou optimiste)', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       booking: {
+        // Aucune mission déjà en cours pour ce partenaire (garde « une seule
+        // mission à la fois »).
+        findFirst: jest.fn().mockResolvedValue(null),
         // Simule exactement la garantie testée : la deuxième tentative
         // concurrente ne trouve plus de ligne au statut SEARCHING_PARTNER.
         updateMany: jest.fn().mockResolvedValue({ count: bookingAlreadyAssigned ? 0 : 1 }),
@@ -88,6 +91,17 @@ describe('MissionsService — acceptOffer (verrou optimiste)', () => {
     const service = new MissionsService(prisma as any, notifications as any);
 
     await expect(service.acceptOffer('offer-1', 'un-autre-utilisateur')).rejects.toThrow();
+  });
+
+  it("refuse l'acceptation si le partenaire a déjà une mission en cours", async () => {
+    const prisma = buildPrismaMock(false);
+    prisma.booking.findFirst = jest.fn().mockResolvedValue({ id: 'autre-booking' });
+    const notifications = { sendOfferLost: jest.fn() };
+    const service = new MissionsService(prisma as any, notifications as any);
+
+    await expect(service.acceptOffer('offer-1', 'user-partner-1')).rejects.toThrow(ConflictException);
+    // On n'a même pas tenté le verrou optimiste.
+    expect(prisma.booking.updateMany).not.toHaveBeenCalled();
   });
 });
 

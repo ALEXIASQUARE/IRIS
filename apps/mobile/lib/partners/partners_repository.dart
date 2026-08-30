@@ -31,6 +31,15 @@ class PartnersRepository {
     return result.map((e) => PartnerOffer.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // Mission assignée non terminée, s'il y en a une — pour la ré-afficher au
+  // redémarrage de l'app (le backend ne présente aucune offre tant qu'une
+  // mission est en cours : une seule à la fois).
+  Future<String?> activeMissionBookingId() async {
+    final result = await _client.get('/partner/active-mission');
+    if (result == null) return null;
+    return (result as Map<String, dynamic>)['bookingId'] as String?;
+  }
+
   // Position GPS temps réel — pour la navigation (trajet vers le client),
   // pas pour le matching (toujours basé sur currentZoneId).
   Future<void> updateLocation({required double latitude, required double longitude}) {

@@ -32,6 +32,11 @@ export class PartnersController {
     return this.partners.listOffers(user.id);
   }
 
+  @Get('active-mission')
+  getActiveMission(@CurrentUser() user: { id: string }) {
+    return this.partners.getActiveMission(user.id);
+  }
+
   @Post('location')
   updateLocation(@Body() dto: UpdateLocationDto, @CurrentUser() user: { id: string }) {
     return this.partners.updateLocation(dto, user.id);

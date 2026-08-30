@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiRequest } from '../api';
 import type { Country, Zone } from '../types';
 import PartnerAuth from './PartnerAuth';
 import PartnerSetup from './PartnerSetup';
@@ -21,6 +22,23 @@ export default function PartnerSpace({
   const { t } = useTranslation();
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+
+  // Reprend la mission en cours au chargement (le backend ne présente aucune
+  // offre tant qu'une mission est assignée : une seule à la fois).
+  useEffect(() => {
+    if (!token || activeBookingId) return;
+    let cancelled = false;
+    apiRequest<{ bookingId: string } | null>('GET', '/partner/active-mission', { token })
+      .then((r) => {
+        if (!cancelled && r?.bookingId) setActiveBookingId(r.bookingId);
+      })
+      .catch(() => {
+        /* pas bloquant */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, activeBookingId]);
 
   function handleAuth(newToken: string) {
     localStorage.setItem(TOKEN_KEY, newToken);

@@ -105,6 +105,19 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
         }
       }
 
+      // Reprend la mission en cours si l'app a été fermée pendant qu'elle
+      // était assignée — sinon le partenaire retomberait sur une liste
+      // d'offres vide (le backend n'en présente aucune tant qu'une mission
+      // est en cours).
+      String? activeBookingId;
+      if (profile.status == 'ACTIVE') {
+        try {
+          activeBookingId = await _partners.activeMissionBookingId();
+        } catch (_) {
+          // pas bloquant — le partenaire verra la liste d'offres
+        }
+      }
+
       setState(() {
         _zoneId = zone?.id;
         _zoneName = zone?.name;
@@ -112,6 +125,7 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
         _countryName = zone?.countryName;
         _profileStatus = profile!.status;
         _available = profile.isAvailable;
+        _activeBookingId = activeBookingId;
       });
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : e.toString());
