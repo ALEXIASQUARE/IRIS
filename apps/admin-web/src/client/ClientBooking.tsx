@@ -166,6 +166,7 @@ export default function ClientBooking({
         token,
         body: {
           zoneId: zone.id,
+          label: landmark || 'Adresse',
           landmark,
           latitude: Number(latitude),
           longitude: Number(longitude),

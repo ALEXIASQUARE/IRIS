@@ -80,6 +80,7 @@ export interface QuoteResult {
 export interface Address {
   id: string
   zoneId: string
+  label?: string | null
   landmark: string
   latitude: number
   longitude: number

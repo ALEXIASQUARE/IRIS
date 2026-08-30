@@ -84,9 +84,13 @@ export function BookingPage() {
 
   const [selectedAddressId, setSelectedAddressId] = useState('')
   const [showNewAddress, setShowNewAddress] = useState(false)
+  const [addressName, setAddressName] = useState('')
   const [landmark, setLandmark] = useState('')
-  const [latitude, setLatitude] = useState('4.05')
-  const [longitude, setLongitude] = useState('9.70')
+  // Position GPS capturée (pas de saisie lat/lng manuelle : dans beaucoup de
+  // pays il n'y a pas d'adresse de rue, le seul point fiable est la position
+  // enregistrée sur place).
+  const [capturedLat, setCapturedLat] = useState<number | null>(null)
+  const [capturedLng, setCapturedLng] = useState<number | null>(null)
   const [locating, setLocating] = useState(false)
 
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt())
@@ -264,8 +268,8 @@ export function BookingPage() {
     setError(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLatitude(pos.coords.latitude.toFixed(6))
-        setLongitude(pos.coords.longitude.toFixed(6))
+        setCapturedLat(pos.coords.latitude)
+        setCapturedLng(pos.coords.longitude)
         setLocating(false)
       },
       (err) => {
@@ -287,12 +291,18 @@ export function BookingPage() {
     try {
       let addressId = selectedAddressId
       if (showNewAddress || !addressId) {
-        if (!landmark.trim()) throw new ApiError('Indiquez un repère pour la nouvelle adresse.', 0)
+        if (!addressName.trim()) {
+          throw new ApiError('Donnez un nom à cette adresse (ex : « Maison de ma mère »).', 0)
+        }
+        if (capturedLat === null || capturedLng === null) {
+          throw new ApiError('Enregistrez votre position actuelle pour cette adresse.', 0)
+        }
         const created = await createAddress({
           zoneId,
-          landmark: landmark.trim(),
-          latitude: Number(latitude) || 0,
-          longitude: Number(longitude) || 0,
+          label: addressName.trim(),
+          landmark: landmark.trim() || addressName.trim(),
+          latitude: capturedLat,
+          longitude: capturedLng,
         })
         addressId = created.id
       }
@@ -584,7 +594,7 @@ export function BookingPage() {
                 <select value={selectedAddressId} onChange={(e) => setSelectedAddressId(e.target.value)}>
                   {addresses.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.landmark}
+                      {a.label || a.landmark}
                     </option>
                   ))}
                 </select>
@@ -597,24 +607,48 @@ export function BookingPage() {
           {(showNewAddress || addresses.length === 0) && (
             <>
               <div className="field">
-                <label>Repère (ex : « Carrefour Ari, portail bleu »)</label>
-                <input value={landmark} onChange={(e) => setLandmark(e.target.value)} />
+                <label>Nom de l'adresse</label>
+                <input
+                  value={addressName}
+                  onChange={(e) => setAddressName(e.target.value)}
+                  placeholder="Ex : Maison de ma mère"
+                />
               </div>
-              <button type="button" className="secondary" onClick={useMyPosition} disabled={locating}>
-                {locating ? <Spinner /> : 'Utiliser ma position actuelle'}
+              <div className="field">
+                <label>Repère (facultatif)</label>
+                <input
+                  value={landmark}
+                  onChange={(e) => setLandmark(e.target.value)}
+                  placeholder="Ex : portail bleu après le carrefour Ari"
+                />
+              </div>
+              <button
+                type="button"
+                className="secondary"
+                onClick={useMyPosition}
+                disabled={locating}
+                style={capturedLat !== null ? { color: 'var(--success)', borderColor: 'var(--success)' } : undefined}
+              >
+                {locating ? (
+                  <Spinner />
+                ) : capturedLat !== null ? (
+                  '✓ Position enregistrée — cliquer pour actualiser'
+                ) : (
+                  'Enregistrer ma position actuelle'
+                )}
               </button>
-              <div className="row" style={{ marginTop: 8 }}>
-                <div className="field">
-                  <label>Latitude</label>
-                  <input value={latitude} onChange={(e) => setLatitude(e.target.value)} />
-                </div>
-                <div className="field">
-                  <label>Longitude</label>
-                  <input value={longitude} onChange={(e) => setLongitude(e.target.value)} />
-                </div>
-              </div>
+              {capturedLat === null && (
+                <p className="muted" style={{ marginTop: 6 }}>
+                  Le partenaire est guidé jusqu'à cette position — enregistrez-la sur place.
+                </p>
+              )}
               {addresses.length > 0 && (
-                <button type="button" className="secondary" onClick={() => setShowNewAddress(false)}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setShowNewAddress(false)}
+                  style={{ marginTop: 8 }}
+                >
                   Utiliser une adresse existante
                 </button>
               )}
@@ -642,7 +676,10 @@ export function BookingPage() {
           <button
             type="button"
             onClick={confirm}
-            disabled={submitting || (showNewAddress && !landmark.trim())}
+            disabled={
+              submitting ||
+              (showNewAddress && (!addressName.trim() || capturedLat === null))
+            }
             style={{ width: '100%' }}
           >
             {submitting ? <Spinner /> : 'Confirmer la réservation'}

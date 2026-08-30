@@ -15,6 +15,7 @@ export function listAddresses(): Promise<Address[]> {
 
 export function createAddress(input: {
   zoneId: string
+  label: string
   landmark: string
   latitude: number
   longitude: number

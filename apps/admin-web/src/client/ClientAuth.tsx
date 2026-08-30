@@ -105,6 +105,7 @@ export default function ClientAuth({
           token: res.accessToken,
           body: {
             zoneId: selectedZone.id,
+            label: districtLabel(selectedZone),
             landmark: t('client.defaultLandmark', { zone: districtLabel(selectedZone) }),
             latitude: selectedZone.centerLat,
             longitude: selectedZone.centerLng,

@@ -106,9 +106,14 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
 
   String? _selectedAddressId;
   bool _showNewAddress = false;
+  // Nom donné par le client à l'adresse (« Maison de ma mère ») + repère
+  // facultatif. Plus de saisie latitude/longitude à la main : la seule
+  // source fiable ici (pas de rues nommées dans beaucoup de pays) est la
+  // position GPS capturée.
+  final _addressNameController = TextEditingController();
   final _landmarkController = TextEditingController();
-  final _latController = TextEditingController(text: '4.05');
-  final _lngController = TextEditingController(text: '9.70');
+  double? _capturedLat;
+  double? _capturedLng;
 
   DateTime _scheduledAt = DateTime.now().add(const Duration(hours: 1));
   bool _urgent = false;
@@ -140,9 +145,8 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
 
   @override
   void dispose() {
+    _addressNameController.dispose();
     _landmarkController.dispose();
-    _latController.dispose();
-    _lngController.dispose();
     super.dispose();
   }
 
@@ -396,14 +400,20 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     try {
       String? addressId = _selectedAddressId;
       if (_showNewAddress || addressId == null) {
-        if (_landmarkController.text.trim().isEmpty) {
-          throw ApiException(0, 'Indiquez un repère pour la nouvelle adresse.');
+        final name = _addressNameController.text.trim();
+        if (name.isEmpty) {
+          throw ApiException(0, "Donnez un nom à cette adresse (ex : « Maison de ma mère »).");
         }
+        if (_capturedLat == null || _capturedLng == null) {
+          throw ApiException(0, 'Enregistrez votre position actuelle pour cette adresse.');
+        }
+        final landmark = _landmarkController.text.trim();
         final created = await _addresses.create(
           zoneId: _zoneId!,
-          landmark: _landmarkController.text.trim(),
-          latitude: double.tryParse(_latController.text) ?? 0,
-          longitude: double.tryParse(_lngController.text) ?? 0,
+          label: name,
+          landmark: landmark.isEmpty ? name : landmark,
+          latitude: _capturedLat!,
+          longitude: _capturedLng!,
         );
         addressId = created.id;
       }
@@ -459,8 +469,8 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       setState(() {
-        _latController.text = position.latitude.toStringAsFixed(6);
-        _lngController.text = position.longitude.toStringAsFixed(6);
+        _capturedLat = position.latitude;
+        _capturedLng = position.longitude;
       });
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -715,7 +725,12 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                 initialValue: _selectedAddressId,
                 decoration: const InputDecoration(labelText: 'Adresse enregistrée'),
                 items: _savedAddresses
-                    .map((a) => DropdownMenuItem(value: a.id, child: Text(a.landmark)))
+                    .map((a) => DropdownMenuItem(
+                          value: a.id,
+                          child: Text(
+                            (a.label != null && a.label!.isNotEmpty) ? a.label! : a.landmark,
+                          ),
+                        ))
                     .toList(),
                 onChanged: _onSavedAddressChanged,
               ),
@@ -725,38 +740,45 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
               ),
             ],
             if (_showNewAddress || _savedAddresses.isEmpty) ...[
+              const SizedBox(height: 4),
               TextField(
-                controller: _landmarkController,
-                decoration: const InputDecoration(labelText: 'Repère (ex: "Carrefour Ari, portail bleu")'),
+                controller: _addressNameController,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: "Nom de l'adresse",
+                  hintText: 'Ex : Maison de ma mère',
+                ),
               ),
               const SizedBox(height: 8),
+              TextField(
+                controller: _landmarkController,
+                decoration: const InputDecoration(
+                  labelText: 'Repère (facultatif)',
+                  hintText: 'Ex : portail bleu après le carrefour Ari',
+                ),
+              ),
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _locating ? null : _useCurrentLocation,
                 icon: _locating
                     ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.my_location),
-                label: const Text('Utiliser ma position actuelle'),
+                    : Icon(_capturedLat != null ? Icons.check_circle : Icons.my_location),
+                label: Text(
+                  _capturedLat != null
+                      ? 'Position enregistrée — appuyez pour actualiser'
+                      : 'Enregistrer ma position actuelle',
+                ),
+                style: _capturedLat != null
+                    ? OutlinedButton.styleFrom(foregroundColor: IrisTheme.successColor(context))
+                    : null,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _latController,
-                      decoration: const InputDecoration(labelText: 'Latitude'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _lngController,
-                      decoration: const InputDecoration(labelText: 'Longitude'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    ),
-                  ),
-                ],
-              ),
+              if (_capturedLat == null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  "Le partenaire est guidé jusqu'à cette position — enregistrez-la sur place.",
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
               if (_savedAddresses.isNotEmpty)
                 TextButton(
                   onPressed: () => setState(() => _showNewAddress = false),
