@@ -19,7 +19,9 @@ export class UsersService {
         landmark: dto.landmark,
         latitude: dto.latitude,
         longitude: dto.longitude,
-        label: dto.label,
+        // Repli sur le repère si un client (mobile pas à jour) n'envoie pas
+        // de nom — la liste des adresses affiche toujours quelque chose.
+        label: dto.label?.trim() || dto.landmark,
         district: dto.district,
         isDefault: dto.isDefault ?? false,
       },
