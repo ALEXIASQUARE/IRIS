@@ -564,28 +564,6 @@ export function BookingPage() {
             Urgent
           </label>
 
-          <button type="button" onClick={getQuote} disabled={quoting || !quoteReady}>
-            {quoting ? <Spinner /> : 'Obtenir un devis'}
-          </button>
-        </>
-      )}
-
-      {quote && (
-        <>
-          <div className="quote">
-            <div>
-              Sous-total : {quote.subtotal.toFixed(0)} {quote.currency}
-            </div>
-            <div>Frais déplacement : {quote.feesTravel.toFixed(0)}</div>
-            <div>Frais plateforme : {quote.feesPlatform.toFixed(0)}</div>
-            {quote.urgencySupplement > 0 && (
-              <div>Supplément urgence : {quote.urgencySupplement.toFixed(0)}</div>
-            )}
-            <div className="quote-total">
-              Total : {quote.total.toFixed(0)} {quote.currency}
-            </div>
-          </div>
-
           <h3>Adresse</h3>
           {addresses.length > 0 && !showNewAddress && (
             <>
@@ -654,6 +632,33 @@ export function BookingPage() {
               )}
             </>
           )}
+
+          <button
+            type="button"
+            onClick={getQuote}
+            disabled={quoting || !quoteReady}
+            style={{ marginTop: 12 }}
+          >
+            {quoting ? <Spinner /> : 'Obtenir un devis'}
+          </button>
+        </>
+      )}
+
+      {quote && (
+        <>
+          <div className="quote">
+            <div>
+              Sous-total : {quote.subtotal.toFixed(0)} {quote.currency}
+            </div>
+            <div>Frais déplacement : {quote.feesTravel.toFixed(0)}</div>
+            <div>Frais plateforme : {quote.feesPlatform.toFixed(0)}</div>
+            {quote.urgencySupplement > 0 && (
+              <div>Supplément urgence : {quote.urgencySupplement.toFixed(0)}</div>
+            )}
+            <div className="quote-total">
+              Total : {quote.total.toFixed(0)} {quote.currency}
+            </div>
+          </div>
 
           <h3>Planification</h3>
           <div className="field">

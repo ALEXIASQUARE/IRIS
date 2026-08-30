@@ -691,6 +691,76 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
               _quote = null;
             }),
           ),
+
+          const SizedBox(height: 8),
+          Text('2. Adresse', style: Theme.of(context).textTheme.titleMedium),
+          if (_savedAddresses.isNotEmpty && !_showNewAddress) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _selectedAddressId,
+              decoration: const InputDecoration(labelText: 'Adresse enregistrée'),
+              items: _savedAddresses
+                  .map((a) => DropdownMenuItem(
+                        value: a.id,
+                        child: Text(
+                          (a.label != null && a.label!.isNotEmpty) ? a.label! : a.landmark,
+                        ),
+                      ))
+                  .toList(),
+              onChanged: _onSavedAddressChanged,
+            ),
+            TextButton(
+              onPressed: () => setState(() => _showNewAddress = true),
+              child: const Text('+ Nouvelle adresse'),
+            ),
+          ],
+          if (_showNewAddress || _savedAddresses.isEmpty) ...[
+            const SizedBox(height: 4),
+            TextField(
+              controller: _addressNameController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: "Nom de l'adresse",
+                hintText: 'Ex : Maison de ma mère',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _landmarkController,
+              decoration: const InputDecoration(
+                labelText: 'Repère (facultatif)',
+                hintText: 'Ex : portail bleu après le carrefour Ari',
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _locating ? null : _useCurrentLocation,
+              icon: _locating
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(_capturedLat != null ? Icons.check_circle : Icons.my_location),
+              label: Text(
+                _capturedLat != null
+                    ? 'Position enregistrée — appuyez pour actualiser'
+                    : 'Enregistrer ma position actuelle',
+              ),
+              style: _capturedLat != null
+                  ? OutlinedButton.styleFrom(foregroundColor: IrisTheme.successColor(context))
+                  : null,
+            ),
+            if (_capturedLat == null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Le partenaire est guidé jusqu'à cette position — enregistrez-la sur place.",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (_savedAddresses.isNotEmpty)
+              TextButton(
+                onPressed: () => setState(() => _showNewAddress = false),
+                child: const Text('Utiliser une adresse existante'),
+              ),
+          ],
+
+          const SizedBox(height: 16),
           LoadingFilledButton(
             onPressed: (_isLaundry ? _cart.isEmpty : _selectedOption == null) ? null : _getQuote,
             busy: _quoting,
@@ -718,73 +788,6 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            Text('2. Adresse', style: Theme.of(context).textTheme.titleMedium),
-            if (_savedAddresses.isNotEmpty && !_showNewAddress) ...[
-              DropdownButtonFormField<String>(
-                initialValue: _selectedAddressId,
-                decoration: const InputDecoration(labelText: 'Adresse enregistrée'),
-                items: _savedAddresses
-                    .map((a) => DropdownMenuItem(
-                          value: a.id,
-                          child: Text(
-                            (a.label != null && a.label!.isNotEmpty) ? a.label! : a.landmark,
-                          ),
-                        ))
-                    .toList(),
-                onChanged: _onSavedAddressChanged,
-              ),
-              TextButton(
-                onPressed: () => setState(() => _showNewAddress = true),
-                child: const Text('+ Nouvelle adresse'),
-              ),
-            ],
-            if (_showNewAddress || _savedAddresses.isEmpty) ...[
-              const SizedBox(height: 4),
-              TextField(
-                controller: _addressNameController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: "Nom de l'adresse",
-                  hintText: 'Ex : Maison de ma mère',
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _landmarkController,
-                decoration: const InputDecoration(
-                  labelText: 'Repère (facultatif)',
-                  hintText: 'Ex : portail bleu après le carrefour Ari',
-                ),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _locating ? null : _useCurrentLocation,
-                icon: _locating
-                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(_capturedLat != null ? Icons.check_circle : Icons.my_location),
-                label: Text(
-                  _capturedLat != null
-                      ? 'Position enregistrée — appuyez pour actualiser'
-                      : 'Enregistrer ma position actuelle',
-                ),
-                style: _capturedLat != null
-                    ? OutlinedButton.styleFrom(foregroundColor: IrisTheme.successColor(context))
-                    : null,
-              ),
-              if (_capturedLat == null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  "Le partenaire est guidé jusqu'à cette position — enregistrez-la sur place.",
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              if (_savedAddresses.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(() => _showNewAddress = false),
-                  child: const Text('Utiliser une adresse existante'),
-                ),
-            ],
             const SizedBox(height: 24),
             Text('3. Planification', style: Theme.of(context).textTheme.titleMedium),
             ListTile(
