@@ -91,6 +91,10 @@ export class BookingsService {
         status: BookingStatus.SEARCHING_PARTNER,
         scheduledAt: new Date(dto.scheduledAt),
         contactPhone,
+        // Point de destination initial = celui de l'adresse ; le client
+        // pourra le rafraîchir quand un partenaire sera assigné.
+        clientLat: address.latitude,
+        clientLng: address.longitude,
         currency: quote.currency,
         pricingSnapshot: quote as any, // figé définitivement — §21.6
         estimatedTotal: quote.total,
@@ -230,6 +234,36 @@ export class BookingsService {
     BookingStatus.PARTNER_ASSIGNED,
     BookingStatus.PARTNER_EN_ROUTE,
   ];
+
+  // Statuts pendant lesquels le client peut encore rafraîchir sa position
+  // (avant que le partenaire ne soit sur place).
+  private readonly LOCATION_UPDATABLE_STATUSES: BookingStatus[] = [
+    BookingStatus.SEARCHING_PARTNER,
+    BookingStatus.PARTNER_ASSIGNED,
+    BookingStatus.PARTNER_EN_ROUTE,
+    BookingStatus.ARRIVED,
+  ];
+
+  async updateClientLocation(
+    bookingId: string,
+    clientId: string,
+    latitude: number,
+    longitude: number,
+  ): Promise<{ ok: true }> {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException('Commande introuvable.');
+    if (booking.clientId !== clientId) {
+      throw new ForbiddenException("Cette commande n'appartient pas à ce client.");
+    }
+    if (!this.LOCATION_UPDATABLE_STATUSES.includes(booking.status)) {
+      throw new ConflictException("La position n'est plus modifiable à ce stade.");
+    }
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { clientLat: latitude, clientLng: longitude, clientLocationUpdatedAt: new Date() },
+    });
+    return { ok: true };
+  }
 
   async cancelBooking(bookingId: string, clientId: string, reason: string): Promise<void> {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });

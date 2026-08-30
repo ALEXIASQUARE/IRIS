@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto, CancelBookingDto } from './dto/create-booking.dto';
+import { CreateBookingDto, CancelBookingDto, UpdateBookingLocationDto } from './dto/create-booking.dto';
 
 // §11 : POST /bookings, GET /bookings/{id}, POST /bookings/{id}/cancel.
 @Controller('bookings')
@@ -19,6 +19,18 @@ export class BookingsController {
   @Get(':id')
   getOne(@Param('id') id: string, @CurrentUser() user: { id: string; role: UserRole }) {
     return this.bookingsService.getBooking(id, user.id, user.role);
+  }
+
+  // Le client rafraîchit le point de destination (confirmation quand le
+  // partenaire est assigné, ou partage en direct pendant l'approche).
+  @Roles(UserRole.CLIENT)
+  @Patch(':id/location')
+  updateLocation(
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingLocationDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.bookingsService.updateClientLocation(id, user.id, dto.latitude, dto.longitude);
   }
 
   @Roles(UserRole.CLIENT)

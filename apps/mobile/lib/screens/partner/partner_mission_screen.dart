@@ -106,6 +106,16 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
     }
   }
 
+  String _agoLabel(String iso) {
+    final t = DateTime.tryParse(iso);
+    if (t == null) return '';
+    final d = DateTime.now().difference(t.toLocal());
+    if (d.inSeconds < 60) return "à l'instant";
+    if (d.inMinutes < 60) return 'il y a ${d.inMinutes} min';
+    if (d.inHours < 24) return 'il y a ${d.inHours} h';
+    return 'il y a ${d.inDays} j';
+  }
+
   // Ouvre la navigation dans Google Maps (ou l'application de cartes par
   // défaut) — indépendant du GPS/du routage interne (OSRM) : c'est ce qui
   // permet réellement au partenaire de se mettre en route (guidage vocal,
@@ -191,10 +201,17 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
             child: Chip(label: Text(bookingStatusLabel(booking.status))),
           ),
           const SizedBox(height: 16),
-          if (_trackingStatuses.contains(booking.status) && booking.address != null) ...[
+          if (_trackingStatuses.contains(booking.status) && booking.destLat != null) ...[
             RouteMapView(
               origin: _myPosition,
-              destination: LatLng(booking.address!.latitude, booking.address!.longitude),
+              destination: LatLng(booking.destLat!, booking.destLng!),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              booking.clientLocationUpdatedAt != null
+                  ? 'Position du client confirmée ${_agoLabel(booking.clientLocationUpdatedAt!)}.'
+                  : "Position issue de l'adresse — le client ne l'a pas encore confirmée.",
+              style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
             if (_locationError != null) ...[
@@ -202,7 +219,7 @@ class _PartnerMissionScreenState extends State<PartnerMissionScreen> {
               const SizedBox(height: 8),
             ],
             OutlinedButton.icon(
-              onPressed: () => _openExternalNavigation(booking.address!.latitude, booking.address!.longitude),
+              onPressed: () => _openExternalNavigation(booking.destLat!, booking.destLng!),
               icon: const Icon(Icons.navigation),
               label: const Text("Ouvrir l'itinéraire (Google Maps)"),
             ),

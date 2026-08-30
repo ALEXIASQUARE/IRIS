@@ -51,6 +51,18 @@ export function cancelBooking(id: string, reason: string): Promise<void> {
   return apiRequest<void>('POST', `/bookings/${id}/cancel`, { body: { reason } })
 }
 
+// Le client rafraîchit le point de destination (confirmation à
+// l'assignation, ou partage en direct pendant l'approche).
+export function updateBookingLocation(
+  id: string,
+  latitude: number,
+  longitude: number,
+): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>('PATCH', `/bookings/${id}/location`, {
+    body: { latitude, longitude },
+  })
+}
+
 export function rateBooking(id: string, score: number, comment?: string): Promise<void> {
   return apiRequest<void>('POST', `/bookings/${id}/rating`, {
     body: { score, ...(comment ? { comment } : {}) },

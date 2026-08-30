@@ -76,6 +76,11 @@ class Booking {
   final List<PriceRevision> priceRevisions;
   final BookingAddress? address;
   final AssignedPartnerInfo? assignedPartner;
+  // Point de destination réel pour la navigation du partenaire — rafraîchi
+  // par le client à l'assignation (voir PATCH /bookings/:id/location).
+  final double? clientLat;
+  final double? clientLng;
+  final String? clientLocationUpdatedAt;
 
   Booking({
     required this.id,
@@ -88,9 +93,17 @@ class Booking {
     this.priceRevisions = const [],
     this.address,
     this.assignedPartner,
+    this.clientLat,
+    this.clientLng,
+    this.clientLocationUpdatedAt,
   });
 
   double get displayTotal => finalTotal ?? estimatedTotal;
+
+  // Point vers lequel guider le partenaire : la position rafraîchie par le
+  // client si disponible, sinon celle de l'adresse.
+  double? get destLat => clientLat ?? address?.latitude;
+  double? get destLng => clientLng ?? address?.longitude;
   bool get isCancellable => cancellableStatuses.contains(status);
 
   // §21.8 — la révision en attente de confirmation client, s'il y en a une.
@@ -116,5 +129,8 @@ class Booking {
         assignedPartner: json['assignedPartner'] != null
             ? AssignedPartnerInfo.fromJson(json['assignedPartner'] as Map<String, dynamic>)
             : null,
+        clientLat: json['clientLat'] != null ? _num(json['clientLat']) : null,
+        clientLng: json['clientLng'] != null ? _num(json['clientLng']) : null,
+        clientLocationUpdatedAt: json['clientLocationUpdatedAt'] as String?,
       );
 }

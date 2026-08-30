@@ -39,6 +39,15 @@ class BookingsRepository {
     return _client.post('/bookings/$bookingId/cancel', body: {'reason': reason});
   }
 
+  // Le client rafraîchit le point de destination (confirmation à
+  // l'assignation, ou partage en direct pendant l'approche).
+  Future<void> updateLocation(String bookingId, double latitude, double longitude) {
+    return _client.patch('/bookings/$bookingId/location', body: {
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+  }
+
   Future<void> rate(String bookingId, int score, String? comment) {
     return _client.post('/bookings/$bookingId/rating', body: {
       'score': score,

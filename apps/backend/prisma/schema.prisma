@@ -346,6 +346,14 @@ model Booking {
   // compte client, mais le client peut en indiquer un autre (ex: réserve
   // pour un proche). Affiché au partenaire assigné et à l'admin.
   contactPhone      String?
+  // Point de destination réel pour la navigation du partenaire. Initialisé
+  // depuis l'adresse à la création, puis rafraîchi par le client quand un
+  // partenaire est assigné (PATCH /bookings/:id/location) — beaucoup de
+  // pays n'ont pas d'adresse de rue, la position sur place est la seule
+  // référence fiable.
+  clientLat               Float?
+  clientLng               Float?
+  clientLocationUpdatedAt DateTime?
   // Choisi par le client à la confirmation, mais le prélèvement effectif
   // n'a lieu qu'à l'arrivée du partenaire (§ paiement à l'arrivée) — voir
   // BookingsService.requestArrivalPayment. Mobile money uniquement, aucun

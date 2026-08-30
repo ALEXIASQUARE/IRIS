@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../api/api_client.dart';
@@ -42,6 +43,14 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
   bool _rating = false;
   bool _confirmingRevision = false;
 
+  // Confirmation / partage de la position pendant que le partenaire est en
+  // approche. Le partage est en avant-plan uniquement (app ouverte sur cet
+  // écran) — pas de suivi en arrière-plan.
+  bool _sharingLive = false;
+  bool _sendingPosition = false;
+  String? _positionMessage;
+  Timer? _liveTimer;
+
   @override
   void initState() {
     super.initState();
@@ -53,8 +62,52 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _liveTimer?.cancel();
     _commentController.dispose();
     super.dispose();
+  }
+
+  Future<Position> _readPosition() async {
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+      throw Exception("Autorisation de localisation refusée.");
+    }
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('Activez la localisation (GPS) sur votre téléphone.');
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+  }
+
+  Future<void> _sendPosition({bool silent = false}) async {
+    if (!silent) setState(() => _sendingPosition = true);
+    try {
+      final p = await _readPosition();
+      await _bookings.updateLocation(widget.bookingId, p.latitude, p.longitude);
+      if (mounted) setState(() => _positionMessage = 'Position transmise au partenaire.');
+    } catch (e) {
+      if (mounted && !silent) {
+        setState(() => _positionMessage = e.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted && !silent) setState(() => _sendingPosition = false);
+    }
+  }
+
+  void _toggleLiveShare(bool on) {
+    setState(() => _sharingLive = on);
+    _liveTimer?.cancel();
+    if (on) {
+      _sendPosition();
+      _liveTimer = Timer.periodic(const Duration(seconds: 15), (_) => _sendPosition(silent: true));
+    }
+  }
+
+  void _stopLiveShare() {
+    _liveTimer?.cancel();
+    if (_sharingLive && mounted) setState(() => _sharingLive = false);
   }
 
   Future<void> _poll() async {
@@ -69,6 +122,8 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
           _error = null;
         });
       }
+      // Le partage en direct n'a de sens que pendant l'approche.
+      if (!_trackingStatuses.contains(booking.status)) _stopLiveShare();
     } on ApiException catch (e) {
       // En sondage de fond, une fois qu'on a déjà des données, on ignore les
       // échecs ponctuels plutôt que d'afficher un bandeau alarmant à chaque
@@ -157,13 +212,49 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
               ),
             ),
           ),
-          if (_trackingStatuses.contains(booking.status) && booking.address != null) ...[
+          if (_trackingStatuses.contains(booking.status) && booking.destLat != null) ...[
             const SizedBox(height: 16),
             RouteMapView(
               origin: booking.assignedPartner?.hasLocation == true
                   ? LatLng(booking.assignedPartner!.currentLat!, booking.assignedPartner!.currentLng!)
                   : null,
-              destination: LatLng(booking.address!.latitude, booking.address!.longitude),
+              destination: LatLng(booking.destLat!, booking.destLng!),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: IrisTheme.cardPadding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Le partenaire est guidé jusqu\'à votre position.',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Si vous avez bougé, confirmez votre position actuelle.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    LoadingFilledButton(
+                      onPressed: () => _sendPosition(),
+                      busy: _sendingPosition,
+                      icon: Icons.my_location,
+                      label: 'Confirmer ma position',
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Partager ma position en direct'),
+                      subtitle: const Text('Tant que cet écran reste ouvert'),
+                      value: _sharingLive,
+                      onChanged: _toggleLiveShare,
+                    ),
+                    if (_positionMessage != null)
+                      Text(_positionMessage!, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
             ),
           ],
           if (booking.status == 'ARRIVED') ...[

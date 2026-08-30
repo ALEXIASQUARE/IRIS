@@ -5,6 +5,7 @@ import {
   confirmPriceRevision,
   getBooking,
   rateBooking,
+  updateBookingLocation,
 } from '../api/bookings'
 import { ApiError } from '../api/client'
 import { IncidentReportForm } from '../components/IncidentReportForm'
@@ -17,6 +18,9 @@ function pendingRevision(b: Booking): PriceRevision | null {
   return b.priceRevisions?.find((r) => !r.confirmedByClientAt) ?? null
 }
 
+// Statuts pendant lesquels le partenaire est en approche.
+const TRACKING_STATUSES = new Set(['PARTNER_ASSIGNED', 'PARTNER_EN_ROUTE'])
+
 export function StatusPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -28,7 +32,11 @@ export function StatusPage() {
   const [rated, setRated] = useState(false)
   const [rating, setRating] = useState(false)
   const [confirmingRevision, setConfirmingRevision] = useState(false)
+  const [sendingPosition, setSendingPosition] = useState(false)
+  const [sharingLive, setSharingLive] = useState(false)
+  const [positionMessage, setPositionMessage] = useState<string | null>(null)
   const loadedRef = useRef(false)
+  const liveTimer = useRef<number | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -76,6 +84,59 @@ export function StatusPage() {
     }
   }
 
+  function readPosition(): Promise<GeolocationPosition> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("La géolocalisation n'est pas disponible."))
+        return
+      }
+      navigator.geolocation.getCurrentPosition(resolve, (e) => reject(new Error(e.message)), {
+        enableHighAccuracy: true,
+      })
+    })
+  }
+
+  async function sendPosition(silent = false) {
+    if (!silent) setSendingPosition(true)
+    try {
+      const p = await readPosition()
+      await updateBookingLocation(id, p.coords.latitude, p.coords.longitude)
+      setPositionMessage('Position transmise au partenaire.')
+    } catch (e) {
+      if (!silent) setPositionMessage(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (!silent) setSendingPosition(false)
+    }
+  }
+
+  function stopLiveShare() {
+    if (liveTimer.current !== null) {
+      window.clearInterval(liveTimer.current)
+      liveTimer.current = null
+    }
+    setSharingLive(false)
+  }
+
+  function toggleLiveShare(on: boolean) {
+    setSharingLive(on)
+    if (liveTimer.current !== null) window.clearInterval(liveTimer.current)
+    liveTimer.current = null
+    if (on) {
+      void sendPosition()
+      liveTimer.current = window.setInterval(() => void sendPosition(true), 15000)
+    }
+  }
+
+  // Coupe le partage quand on quitte l'écran.
+  useEffect(() => () => stopLiveShare(), [])
+
+  // Coupe le partage dès que le partenaire n'est plus en approche.
+  useEffect(() => {
+    if (booking && !TRACKING_STATUSES.has(booking.status) && liveTimer.current !== null) {
+      stopLiveShare()
+    }
+  }, [booking])
+
   async function submitRating(e: React.FormEvent) {
     e.preventDefault()
     setRating(true)
@@ -115,6 +176,31 @@ export function StatusPage() {
       <div className="total">
         {total.toFixed(0)} {booking.currency}
       </div>
+
+      {TRACKING_STATUSES.has(booking.status) && (
+        <div className="card" style={{ background: 'var(--blue-soft)' }}>
+          <strong>Le partenaire est guidé jusqu'à votre position.</strong>
+          <p className="muted" style={{ margin: '4px 0 12px' }}>
+            Si vous avez bougé, confirmez votre position actuelle.
+          </p>
+          <button type="button" onClick={() => void sendPosition()} disabled={sendingPosition}>
+            {sendingPosition ? <Spinner /> : 'Confirmer ma position'}
+          </button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={sharingLive}
+              onChange={(e) => toggleLiveShare(e.target.checked)}
+            />
+            Partager ma position en direct (tant que cette page reste ouverte)
+          </label>
+          {positionMessage && (
+            <p className="muted" style={{ marginBottom: 0 }}>
+              {positionMessage}
+            </p>
+          )}
+        </div>
+      )}
 
       {booking.status === 'ARRIVED' && (
         <InlineMessage kind="info">

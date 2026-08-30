@@ -1,4 +1,4 @@
-import { IsUUID, IsDateString, IsOptional, IsBoolean, IsArray, ValidateNested, IsIn, IsString, IsInt, Min } from 'class-validator';
+import { IsUUID, IsDateString, IsOptional, IsBoolean, IsArray, ValidateNested, IsIn, IsString, IsInt, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LaundryItemDto } from '../../pricing/dto/quote.dto';
 
@@ -55,4 +55,14 @@ export class CreateBookingDto {
 export class CancelBookingDto {
   @IsString()
   reason: string;
+}
+
+// Rafraîchissement du point de destination par le client (confirmation à
+// l'assignation, ou partage en direct pendant l'approche).
+export class UpdateBookingLocationDto {
+  @IsNumber()
+  latitude: number;
+
+  @IsNumber()
+  longitude: number;
 }
