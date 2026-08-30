@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "version": "1.3.3",
+  "versionCode": 9,
+  "version": "1.3.4",
   "apkUrl": "https://backend-production-21788.up.railway.app/latest.apk",
-  "notes": "Réservation : vous pouvez maintenant choisir le pays de la prestation. Interface entièrement redessinée (couleurs, écrans, messages). Services disponibles dans davantage de pays."
+  "notes": "Adresses enregistrées avec un nom (ex : « Maison de ma mère ») et position GPS. Le client peut confirmer ou partager sa position quand le partenaire arrive. Un partenaire ne prend plus qu'une mission à la fois."
 }
